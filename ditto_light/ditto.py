@@ -13,7 +13,8 @@ from .dataset import DittoDataset
 from torch.utils import data
 from transformers import AutoModel, AdamW, get_linear_schedule_with_warmup
 from tensorboardX import SummaryWriter
-from apex import amp
+# Replace Apex with PyTorch native AMP
+from torch.cuda.amp import autocast, GradScaler
 
 lm_mp = {'roberta': 'roberta-base',
          'distilbert': 'distilbert-base-uncased'}
@@ -105,7 +106,7 @@ def evaluate(model, iterator, threshold=None):
         return f1, best_th
 
 
-def train_step(train_iter, model, optimizer, scheduler, hp):
+def train_step(train_iter, model, optimizer, scheduler, hp, scaler=None):
     """Perform a single training step
 
     Args:
@@ -114,6 +115,7 @@ def train_step(train_iter, model, optimizer, scheduler, hp):
         optimizer (Optimizer): the optimizer (Adam or AdamW)
         scheduler (LRScheduler): learning rate scheduler
         hp (Namespace): other hyper-parameters (e.g., fp16)
+        scaler (GradScaler, optional): gradient scaler for fp16
 
     Returns:
         None
@@ -123,21 +125,32 @@ def train_step(train_iter, model, optimizer, scheduler, hp):
     for i, batch in enumerate(train_iter):
         optimizer.zero_grad()
 
-        if len(batch) == 2:
-            x, y = batch
-            prediction = model(x)
-        else:
-            x1, x2, y = batch
-            prediction = model(x1, x2)
-
-        loss = criterion(prediction, y.to(model.device))
-
         if hp.fp16:
-            with amp.scale_loss(loss, optimizer) as scaled_loss:
-                scaled_loss.backward()
+            with autocast():
+                if len(batch) == 2:
+                    x, y = batch
+                    prediction = model(x)
+                else:
+                    x1, x2, y = batch
+                    prediction = model(x1, x2)
+                
+                loss = criterion(prediction, y.to(model.device))
+            
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
         else:
+            if len(batch) == 2:
+                x, y = batch
+                prediction = model(x)
+            else:
+                x1, x2, y = batch
+                prediction = model(x1, x2)
+
+            loss = criterion(prediction, y.to(model.device))
             loss.backward()
-        optimizer.step()
+            optimizer.step()
+        
         scheduler.step()
         if i % 10 == 0: # monitoring
             print(f"step: {i}, loss: {loss.item()}")
@@ -183,9 +196,10 @@ def train(trainset, validset, testset, run_tag, hp):
                        alpha_aug=hp.alpha_aug)
     model = model.cuda()
     optimizer = AdamW(model.parameters(), lr=hp.lr)
-
-    if hp.fp16:
-        model, optimizer = amp.initialize(model, optimizer, opt_level='O2')
+    
+    # Initialize gradient scaler for fp16 training
+    scaler = GradScaler() if hp.fp16 else None
+    
     num_steps = (len(trainset) // hp.batch_size) * hp.n_epochs
     scheduler = get_linear_schedule_with_warmup(optimizer,
                                                 num_warmup_steps=0,
@@ -198,7 +212,7 @@ def train(trainset, validset, testset, run_tag, hp):
     for epoch in range(1, hp.n_epochs+1):
         # train
         model.train()
-        train_step(train_iter, model, optimizer, scheduler, hp)
+        train_step(train_iter, model, optimizer, scheduler, hp, scaler)
 
         # eval
         model.eval()

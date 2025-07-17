@@ -15,7 +15,7 @@ import traceback
 
 from torch.utils import data
 from tqdm import tqdm
-from apex import amp
+# Apex not needed - using PyTorch native AMP
 from scipy.special import softmax
 
 from ditto_light.ditto import evaluate, DittoModel
@@ -289,8 +289,7 @@ def load_model(task, path, lm, use_gpu, fp16=True):
     model.load_state_dict(saved_state['model'])
     model = model.to(device)
 
-    if fp16 and 'cuda' in device:
-        model = amp.initialize(model, opt_level='O2')
+    # fp16 optimization is now handled during training, not model loading
 
     return config, model
 
