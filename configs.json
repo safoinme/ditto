@@ -902,4 +902,12 @@
   "trainset": "data/wdc/cameras/title_description_brand_specTableContent/train.txt.xlarge",
   "validset": "data/wdc/cameras/title_description_brand_specTableContent/valid.txt.xlarge",
   "testset": "data/wdc/cameras/title_description_brand_specTableContent/test.txt"
+},
+{
+  "name": "person_records",
+  "task_type": "classification",
+  "vocab": ["0", "1"],
+  "trainset": "data/person_records/train.txt",
+  "validset": "data/person_records/valid.txt",
+  "testset": "data/person_records/test.txt"
 }]
