@@ -4,13 +4,15 @@ regex
 scipy
 sentencepiece
 scikit-learn
-spacy>=3.4
-# Install PyTorch with CUDA 12.5 support using pip index URL
+spacy
+# Install PyTorch with CUDA 12.4 support using pip index URL
 # Run: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu125
 torch
 torchvision
 torchaudio
-transformers>=4.21.0
-tqdm>=4.64.0
-jsonlines>=2.0.0
-nltk>=3.7
+transformers
+tqdm
+jsonlines
+nltk
+tensorboard
+tensorboardX
