@@ -11,7 +11,8 @@ import argparse
 
 from .dataset import DittoDataset
 from torch.utils import data
-from transformers import AutoModel, AdamW, get_linear_schedule_with_warmup
+from torch.optim import AdamW
+from transformers import AutoModel, get_linear_schedule_with_warmup
 from tensorboardX import SummaryWriter
 # Replace Apex with PyTorch native AMP
 from torch.cuda.amp import autocast, GradScaler
