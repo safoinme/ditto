@@ -19,8 +19,8 @@ RUN apt-get update && apt-get install -y \
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.cargo/bin:$PATH"
 
-# Create .local/bin directory for jovyan user with proper ownership
-RUN mkdir -p /home/jovyan/.local/bin && chown -R jovyan:users /home/jovyan/.local
+# Create directories for jovyan user with proper ownership
+RUN mkdir -p /home/jovyan/.local/bin /home/jovyan/.config/uv && chown -R jovyan:users /home/jovyan/.local /home/jovyan/.config
 
 # Switch back to jovyan user (standard for Kubeflow notebooks)
 USER jovyan
