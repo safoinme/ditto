@@ -3,9 +3,9 @@ FROM kubeflownotebookswg/jupyter-pytorch-cuda-full:latest
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
-ENV CUDA_VERSION=12.4
+ENV CUDA_VERSION=12.2
 
-# Install system dependencies and CUDA 12.4 toolkit
+# Install system dependencies
 USER root
 
 # Update package lists and install essential tools
@@ -38,9 +38,9 @@ WORKDIR /home/jovyan
 # Copy requirements file
 COPY --chown=jovyan:users requirements.txt .
 
-# Install PyTorch with CUDA 12.4 support first using uv
+# Install PyTorch with CUDA 12.1 support (compatible with CUDA 12.2 drivers)
 RUN /home/jovyan/.local/bin/uv pip install --system \
-    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # Install remaining requirements using uv for fast installation
 RUN /home/jovyan/.local/bin/uv pip install --system -r requirements.txt
