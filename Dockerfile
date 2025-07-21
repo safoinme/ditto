@@ -27,7 +27,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
 
 # Install PyTorch with CUDA 12.1 support (compatible with CUDA 12.2)
-RUN uv pip install --system torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+RUN uv pip install --system torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 
 # Copy requirements file and install remaining requirements (as root)
 COPY requirements.txt .
@@ -50,4 +50,4 @@ ENV PATH="/home/jovyan/.local/bin:$PATH"
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Verify installations
-RUN python -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}')"
+RUN python3 -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}')"
