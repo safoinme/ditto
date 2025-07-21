@@ -3,21 +3,22 @@ FROM kubeflownotebookswg/jupyter-pytorch-cuda-full:latest
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
-ENV CUDA_VERSION=12.2
 
 # Install system dependencies
 USER root
 
-# Add NVIDIA CUDA repository and install CUDA 12.2 toolkit
+# Add NVIDIA CUDA repository and install CUDA 12.4 toolkit
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
     build-essential \
     gnupg2 \
+    software-properties-common \
     && wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.0-1_all.deb \
     && dpkg -i cuda-keyring_1.0-1_all.deb \
     && apt-get update \
-    && apt-get install -y cuda-toolkit-12-2 \
+    && apt-get install -y cuda-toolkit-12-4=12.4.1-1 \
+    && apt-mark hold cuda-toolkit-12-4 \
     && rm -rf /var/lib/apt/lists/* cuda-keyring_1.0-1_all.deb
 
 # Install uv for fast Python package management
@@ -45,7 +46,7 @@ COPY --chown=jovyan:users requirements.txt .
 
 # Install PyTorch with CUDA 12.1 support (compatible with CUDA 12.2 drivers)  
 RUN /home/jovyan/.local/bin/uv pip install --system \
-    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 
 # Install remaining requirements using uv for fast installation
 RUN /home/jovyan/.local/bin/uv pip install --system -r requirements.txt
