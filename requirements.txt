@@ -16,3 +16,7 @@ jsonlines
 nltk
 tensorboard
 tensorboardX
+pyhive
+thrift
+thrift_sasl
+pandas

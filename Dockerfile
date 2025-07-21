@@ -40,20 +40,7 @@ RUN /home/jovyan/.cargo/bin/uv pip install --system \
     torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 
 # Install remaining requirements using uv for fast installation
-RUN /home/jovyan/.cargo/bin/uv pip install --system \
-    gensim \
-    numpy \
-    regex \
-    scipy \
-    sentencepiece \
-    scikit-learn \
-    spacy \
-    transformers \
-    tqdm \
-    jsonlines \
-    nltk \
-    tensorboard \
-    tensorboardX
+RUN /home/jovyan/.cargo/bin/uv pip install --system -r requirements.txt
 
 # Verify installations
 RUN python -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}')"
