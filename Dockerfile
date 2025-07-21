@@ -23,18 +23,15 @@ RUN pip3 install --no-cache-dir jupyter jupyterlab \
     && usermod -aG sudo jovyan
 
 # Install uv for fast Python package management and set up path properly
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
-    export PATH="/root/.cargo/bin:$PATH"
-ENV PATH="/root/.cargo/bin:$PATH"
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
 
 # Install PyTorch with CUDA 12.1 support (compatible with CUDA 12.2)
-RUN export PATH="/root/.cargo/bin:$PATH" && \
-    uv pip install --system torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+RUN uv pip install --system torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # Copy requirements file and install remaining requirements (as root)
 COPY requirements.txt .
-RUN export PATH="/root/.cargo/bin:$PATH" && \
-    uv pip install --system -r requirements.txt
+RUN uv pip install --system -r requirements.txt
 
 # Create directories for jovyan user with proper ownership
 RUN mkdir -p /home/jovyan/.local/bin /home/jovyan/.config/uv && chown -R jovyan:users /home/jovyan/.local /home/jovyan/.config
