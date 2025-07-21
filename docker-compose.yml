@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  # Ditto Entity Matching Service
+  ditto:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ditto-matching
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - HIVE_HOST=hive
+      - HIVE_PORT=10000
+      - HIVE_USER=hive
+      - HIVE_DATABASE=default
+      - PYTHONPATH=/app/ditto
+    volumes:
+      - ./data:/data
+      - ./checkpoints:/checkpoints
+      - ./models:/models
+      - ./config:/config
+      - ./output:/app/ditto/output
+    ports:
+      - "8888:8888"  # Jupyter (if needed)
+    depends_on:
+      - hive
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - ditto-network
+    command: ["bash"]
+    stdin_open: true
+    tty: true
+
+  # Hive Metastore Database
+  postgres:
+    image: postgres:13
+    container_name: ditto-postgres
+    environment:
+      - POSTGRES_DB=metastore
+      - POSTGRES_USER=hive
+      - POSTGRES_PASSWORD=hive123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ditto-network
+
+  # Hive Service
+  hive:
+    image: apache/hive:3.1.3
+    container_name: ditto-hive
+    environment:
+      - SERVICE_NAME=hiveserver2
+      - DB_DRIVER=postgres
+      - SERVICE_OPTS=-Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://postgres:5432/metastore -Djavax.jdo.option.ConnectionUserName=hive -Djavax.jdo.option.ConnectionPassword=hive123
+    depends_on:
+      - postgres
+    ports:
+      - "10000:10000"  # HiveServer2
+      - "10002:10002"  # Hive Web UI
+    volumes:
+      - ./data/hive:/opt/hive/data
+      - hive_warehouse:/opt/hive/data/warehouse
+    networks:
+      - ditto-network
+    command: ["sh", "-c", "
+      /opt/hive/bin/schematool -initSchema -dbType postgres || true &&
+      /opt/hive/bin/hive --service hiveserver2
+    "]
+
+  # Optional Jupyter Notebook for development
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ditto-jupyter
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - JUPYTER_TOKEN=ditto123
+      - HIVE_HOST=hive
+      - HIVE_PORT=10000
+      - HIVE_USER=hive
+    volumes:
+      - ./notebooks:/home/jovyan/work
+      - ./data:/data
+      - ./checkpoints:/checkpoints
+    ports:
+      - "8889:8888"
+    networks:
+      - ditto-network
+    command: ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=ditto123"]
+
+volumes:
+  postgres_data:
+  hive_warehouse:
+
+networks:
+  ditto-network:
+    driver: bridge

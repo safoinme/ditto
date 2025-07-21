@@ -1,0 +1,149 @@
+# Enhanced Dockerfile for Ditto with Kubeflow Pipeline Support
+FROM kubeflownotebookswg/jupyter-pytorch-cuda-full:latest
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV CUDA_VERSION=12.2
+ENV PYTHONPATH=/app:$PYTHONPATH
+
+# Install system dependencies as root
+USER root
+
+# Update package lists and install essential tools + Java for Hive
+RUN apt-get update && apt-get install -y \
+    wget \
+    curl \
+    build-essential \
+    openjdk-11-jdk \
+    unzip \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set Java environment
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+ENV PATH=$PATH:$JAVA_HOME/bin
+
+# Install uv for fast Python package management as root
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
+
+# Create application directory and set permissions
+RUN mkdir -p /app/ditto && \
+    mkdir -p /data/input && \
+    mkdir -p /data/output && \
+    mkdir -p /checkpoints && \
+    mkdir -p /home/jovyan/.local/bin && \
+    mkdir -p /home/jovyan/.config/uv && \
+    chown -R jovyan:users /app && \
+    chown -R jovyan:users /data && \
+    chown -R jovyan:users /checkpoints && \
+    chown -R jovyan:users /home/jovyan/.local && \
+    chown -R jovyan:users /home/jovyan/.config
+
+# Switch back to jovyan user
+USER jovyan
+
+# Install uv for jovyan user
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Add uv to jovyan user's PATH
+ENV PATH="/home/jovyan/.local/bin:$PATH"
+RUN echo 'export PATH="/home/jovyan/.local/bin:$PATH"' >> /home/jovyan/.bashrc
+
+# Set working directory
+WORKDIR /app/ditto
+
+# Copy requirements file first (for better caching)
+COPY --chown=jovyan:users requirements.txt .
+
+# Create enhanced requirements file with Hive and Kubeflow dependencies
+RUN cat > requirements_enhanced.txt << EOF
+# Base Ditto requirements
+gensim
+numpy
+regex
+scipy
+sentencepiece
+scikit-learn
+spacy
+transformers
+tqdm
+jsonlines
+nltk
+tensorboard
+tensorboardX
+pandas>=1.3.0
+
+# PyTorch (will be installed separately with CUDA support)
+# torch
+# torchvision  
+# torchaudio
+
+# Hive connectivity
+pyhive[hive]>=0.6.5
+thrift>=0.13.0
+sasl>=0.3.1
+thrift_sasl>=0.4.3
+
+# Kubeflow Pipeline SDK
+kfp>=1.8.0
+kfp-pipeline-spec>=0.1.13
+kubernetes>=18.20.0
+
+# Additional utilities
+PyYAML>=5.4.0
+requests>=2.25.0
+click>=8.0.0
+python-dotenv>=0.19.0
+EOF
+
+# Install PyTorch with CUDA support first
+RUN /home/jovyan/.local/bin/uv pip install \
+    torch==2.1.0+cu121 \
+    torchvision==0.16.0+cu121 \
+    torchaudio==2.1.0+cu121 \
+    --index-url https://download.pytorch.org/whl/cu121
+
+# Install enhanced requirements using uv
+RUN /home/jovyan/.local/bin/uv pip install -r requirements_enhanced.txt
+
+# Download spaCy English model
+RUN python -m spacy download en_core_web_lg
+
+# Verify installations
+RUN python -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}')" && \
+    python -c "import pyhive; print('Hive connectivity: OK')" && \
+    python -c "import kfp; print(f'Kubeflow Pipelines SDK version: {kfp.__version__}')"
+
+# Copy the entire project
+COPY --chown=jovyan:users . .
+
+# Copy the Hive data extractor
+COPY --chown=jovyan:users hive_data_extractor.py .
+
+# Make scripts executable
+RUN chmod +x *.py
+
+# Create a simple entrypoint script
+RUN cat > entrypoint.sh << 'EOF'
+#!/bin/bash
+set -e
+
+echo "Starting Ditto Kubeflow Pipeline Container"
+echo "PyTorch CUDA Available: $(python -c 'import torch; print(torch.cuda.is_available())')"
+echo "Working Directory: $(pwd)"
+echo "Available Files: $(ls -la)"
+
+# Execute the command passed to docker run
+exec "$@"
+EOF
+
+RUN chmod +x entrypoint.sh
+
+# Set default command
+CMD ["python", "--version"]
+
+# Expose ports for Jupyter if needed
+EXPOSE 8888
+
+ENTRYPOINT ["./entrypoint.sh"]
