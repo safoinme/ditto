@@ -22,9 +22,12 @@ ENV PATH="/root/.cargo/bin:$PATH"
 # Switch back to jovyan user (standard for Kubeflow notebooks)
 USER jovyan
 
+# Create .local/bin directory and set permissions
+RUN mkdir -p /home/jovyan/.local/bin
+
 # Add uv to jovyan user's PATH
-RUN echo 'export PATH="/home/jovyan/.cargo/bin:$PATH"' >> /home/jovyan/.bashrc
-ENV PATH="/home/jovyan/.cargo/bin:$PATH"
+RUN echo 'export PATH="/home/jovyan/.local/bin:$PATH"' >> /home/jovyan/.bashrc
+ENV PATH="/home/jovyan/.local/bin:$PATH"
 
 # Install uv for jovyan user
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -36,11 +39,11 @@ WORKDIR /home/jovyan
 COPY --chown=jovyan:users requirements.txt .
 
 # Install PyTorch with CUDA 12.4 support first using uv
-RUN /home/jovyan/.cargo/bin/uv pip install --system \
+RUN /home/jovyan/.local/bin/uv pip install --system \
     torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 
 # Install remaining requirements using uv for fast installation
-RUN /home/jovyan/.cargo/bin/uv pip install --system -r requirements.txt
+RUN /home/jovyan/.local/bin/uv pip install --system -r requirements.txt
 
 # Verify installations
 RUN python -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}')"
