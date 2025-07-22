@@ -5,10 +5,12 @@ from transformers import AutoTokenizer
 
 from .augment import Augmenter
 
+import os
+
 # map lm name to huggingface's pre-trained model names
 lm_mp = {'roberta': 'roberta-base',
          'distilbert': 'distilbert-base-uncased',
-         'bert': 'bert-base-uncased'}
+         'bert': os.getenv('BERT_MODEL_PATH', './models/bert-base-uncased')}
 
 def get_tokenizer(lm):
     if lm in lm_mp:
@@ -78,7 +80,11 @@ class DittoDataset(data.Dataset):
         # augment if da is set
         if self.da is not None:
             combined = self.augmenter.augment_sent(left + ' [SEP] ' + right, self.da)
-            left, right = combined.split(' [SEP] ')
+            if ' [SEP] ' in combined:
+                left, right = combined.split(' [SEP] ')
+            else:
+                # fallback: use original if separator is missing
+                left, right = self.pairs[idx][0], self.pairs[idx][1]
             x_aug = self.tokenizer.encode(text=left,
                                       text_pair=right,
                                       max_length=self.max_len,

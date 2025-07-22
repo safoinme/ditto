@@ -3,6 +3,7 @@ FROM nvidia/cuda:12.2.0-devel-ubuntu22.04
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
+ENV BERT_MODEL_PATH=/home/jovyan/models/bert-base-uncased
 
 # Install system dependencies including Python and Jupyter
 RUN apt-get update && apt-get install -y \

@@ -19,7 +19,7 @@ from torch.cuda.amp import autocast, GradScaler
 
 lm_mp = {'roberta': 'roberta-base',
          'distilbert': 'distilbert-base-uncased',
-         'bert': 'bert-base-uncased'}
+         'bert': os.getenv('BERT_MODEL_PATH', './models/bert-base-uncased')}
 
 class DittoModel(nn.Module):
     """A baseline model for EM."""
