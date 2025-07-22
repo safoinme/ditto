@@ -49,5 +49,8 @@ ENV PATH="/home/jovyan/.local/bin:$PATH"
 # Install uv for jovyan user
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
+# Copy the local directory contents into the container
+COPY --chown=jovyan:users . .
+
 # Verify installations
 RUN python3 -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}')"
