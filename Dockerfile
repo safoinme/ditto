@@ -36,7 +36,7 @@ COPY requirements.txt .
 RUN uv pip install --system -r requirements.txt
 
 # Install spaCy model (as root)
-RUN python3 -m spacy download en_core_web_lg
+RUN python3 -m spacy download en_core_web_sm
 
 # Create directories for jovyan user with proper ownership
 RUN mkdir -p /home/jovyan/.local/bin /home/jovyan/.config/uv && chown -R jovyan:users /home/jovyan/.local /home/jovyan/.config

@@ -65,11 +65,11 @@ def download_spacy_model():
     import subprocess
     import sys
     
-    print("Downloading spaCy en_core_web_lg model...")
+    print("Downloading spaCy en_core_web_sm model...")
     try:
         # Download the model
-        subprocess.check_call([sys.executable, "-m", "spacy", "download", "en_core_web_lg"])
-        print("✓ spaCy en_core_web_lg model downloaded successfully")
+        subprocess.check_call([sys.executable, "-m", "spacy", "download", "en_core_web_sm"])
+        print("✓ spaCy en_core_web_sm model downloaded successfully")
         return True
     except subprocess.CalledProcessError as e:
         print(f"✗ Failed to download spaCy model: {e}")

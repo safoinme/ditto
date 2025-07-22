@@ -48,7 +48,7 @@ RUN /home/jovyan/.local/bin/uv pip install --system \
 RUN /home/jovyan/.local/bin/uv pip install --system -r requirements.txt
 
 # Install spaCy model (as jovyan user)
-RUN python -m spacy download en_core_web_lg
+RUN python -m spacy download en_core_web_sm
 
 # Copy the local directory contents into the container
 COPY --chown=jovyan:users . .

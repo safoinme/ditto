@@ -55,7 +55,7 @@ class ProductDKInjector(DKInjector):
     """
     def initialize(self):
         """Initialize spacy"""
-        self.nlp = spacy.load('en_core_web_lg')
+        self.nlp = spacy.load('en_core_web_sm')
 
     def transform(self, entry):
         """Transform a data entry.
@@ -112,7 +112,7 @@ class GeneralDKInjector(DKInjector):
     """
     def initialize(self):
         """Initialize spacy"""
-        self.nlp = spacy.load('en_core_web_lg')
+        self.nlp = spacy.load('en_core_web_sm')
 
     def transform(self, entry):
         """Transform a data entry.

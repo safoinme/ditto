@@ -108,7 +108,7 @@ RUN /home/jovyan/.local/bin/uv pip install \
 RUN /home/jovyan/.local/bin/uv pip install -r requirements_enhanced.txt
 
 # Download spaCy English model
-RUN python -m spacy download en_core_web_lg
+RUN python -m spacy download en_core_web_sm
 
 # Verify installations
 RUN python -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}')" && \
