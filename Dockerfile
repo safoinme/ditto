@@ -4,6 +4,7 @@ FROM nvidia/cuda:12.2.0-devel-ubuntu22.04
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
 ENV BERT_MODEL_PATH=/home/jovyan/models/bert-base-uncased
+ENV NLTK_DATA=/home/jovyan/nltk_data
 
 # Install system dependencies including Python and Jupyter
 RUN apt-get update && apt-get install -y \
@@ -52,6 +53,9 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Copy the local directory contents into the container
 COPY --chown=jovyan:users . .
+
+# Download models and NLTK data (run as jovyan user)
+RUN python3 download_bert_model.py
 
 # Verify installations
 RUN python3 -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}')"
