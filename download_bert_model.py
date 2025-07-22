@@ -60,6 +60,25 @@ def download_nltk_data():
         if len(files) > 5:
             print(f"{subindent}... and {len(files) - 5} more files")
 
+def download_spacy_model():
+    """Download spaCy model for domain knowledge injection."""
+    import subprocess
+    import sys
+    
+    print("Downloading spaCy en_core_web_lg model...")
+    try:
+        # Download the model
+        subprocess.check_call([sys.executable, "-m", "spacy", "download", "en_core_web_lg"])
+        print("✓ spaCy en_core_web_lg model downloaded successfully")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"✗ Failed to download spaCy model: {e}")
+        return False
+    except Exception as e:
+        print(f"✗ Error downloading spaCy model: {e}")
+        return False
+
 if __name__ == "__main__":
     download_bert_model()
     download_nltk_data()
+    download_spacy_model()
