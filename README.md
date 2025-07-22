@@ -11,14 +11,14 @@ For more technical details, see the [Deep Entity Matching with Pre-Trained Langu
 * Python 3.7.7
 * PyTorch 1.9
 * HuggingFace Transformers 4.9.2
-* Spacy with the ``en_core_web_lg`` models
+* Spacy with the ``en_core_web_sm`` models
 * NVIDIA Apex (fp16 training)
 
 Install required packages
 ```
 conda install -c conda-forge nvidia-apex
 pip install -r requirements.txt
-python -m spacy download en_core_web_lg
+python -m spacy download en_core_web_sm
 ```
 
 ## The EM pipeline

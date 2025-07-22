@@ -18,41 +18,170 @@ def extract_hive_data_func(
     hive_port: int,
     hive_user: str,
     hive_database: str,
-    table1: str,
-    table2: str,
+    input_table: str,
     output_path: str,
-    table1_limit: Optional[int] = None,
-    table2_limit: Optional[int] = None
+    sample_limit: Optional[int] = None,
+    matching_mode: str = 'auto'
 ) -> str:
-    """Extract data from two Hive tables and create cartesian product pairs for ditto matching."""
-    from hive_data_extractor import HiveDataExtractor
+    """Extract data from Hive table and convert to DITTO format for matching."""
+    from pyhive import hive
+    import pandas as pd
+    import json
     import os
     
     # Ensure output directory exists
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
-    # Create extractor and extract data
-    extractor = HiveDataExtractor(
-        host=hive_host,
-        port=hive_port,
-        username=hive_user,
-        database=hive_database
-    )
-    
     try:
-        extractor.extract_and_pair(
-            table1=table1,
-            table2=table2,
-            output_path=output_path,
-            table1_limit=table1_limit,
-            table2_limit=table2_limit
+        # Connect to Hive
+        connection = hive.Connection(
+            host=hive_host,
+            port=hive_port,
+            username=hive_user,
+            database=hive_database,
+            auth='NOSASL'
         )
+        
+        # Extract data
+        query = f"SELECT * FROM {input_table}"
+        if sample_limit:
+            query += f" LIMIT {sample_limit}"
+        
+        df = pd.read_sql(query, connection)
+        print(f"✅ Extracted {len(df)} records from {input_table}")
+        print(f"📊 Columns: {list(df.columns)}")
+        
+        # Detect and convert to DITTO format
+        def detect_table_structure(df):
+            columns = list(df.columns)
+            clean_columns = []
+            for col in columns:
+                if '.' in col:
+                    clean_col = col.split('.', 1)[1]
+                else:
+                    clean_col = col
+                clean_columns.append(clean_col)
+            
+            left_columns = [col for col in clean_columns if col.endswith('_left')]
+            right_columns = [col for col in clean_columns if col.endswith('_right')]
+            left_fields = {col[:-5] for col in left_columns}
+            right_fields = {col[:-6] for col in right_columns}
+            matching_fields = left_fields.intersection(right_fields)
+            
+            if matching_fields:
+                structure_type = "production"
+                message = f"🏭 Production table detected with {len(matching_fields)} matching field pairs"
+            else:
+                structure_type = "testing"
+                message = f"🧪 Testing table detected with {len(clean_columns)} fields for self-matching"
+            
+            return {
+                'type': structure_type,
+                'columns': columns,
+                'clean_columns': clean_columns,
+                'matching_fields': list(matching_fields),
+                'message': message
+            }
+        
+        def convert_production_format(df, structure):
+            records = []
+            for idx, row in df.iterrows():
+                left_parts = []
+                right_parts = []
+                
+                for field in structure['matching_fields']:
+                    left_col = None
+                    right_col = None
+                    
+                    for col in df.columns:
+                        clean_col = col.split('.', 1)[1] if '.' in col else col
+                        if clean_col == f"{field}_left":
+                            left_col = col
+                        elif clean_col == f"{field}_right":
+                            right_col = col
+                    
+                    if left_col and pd.notna(row[left_col]) and str(row[left_col]).strip():
+                        value = str(row[left_col]).strip()
+                        left_parts.append(f"COL {field} VAL {value}")
+                    
+                    if right_col and pd.notna(row[right_col]) and str(row[right_col]).strip():
+                        value = str(row[right_col]).strip()
+                        right_parts.append(f"COL {field} VAL {value}")
+                
+                left_text = " ".join(left_parts)
+                right_text = " ".join(right_parts)
+                
+                record = {
+                    "left": left_text,
+                    "right": right_text,
+                    "id": idx
+                }
+                records.append(record)
+            
+            return records
+        
+        def convert_testing_format(df, structure):
+            records = []
+            for idx, row in df.iterrows():
+                col_val_parts = []
+                
+                for col in df.columns:
+                    if pd.notna(row[col]) and str(row[col]).strip():
+                        if '.' in col:
+                            clean_col = col.split('.', 1)[1]
+                        else:
+                            clean_col = col
+                        
+                        value = str(row[col]).strip()
+                        col_val_parts.append(f"COL {clean_col} VAL {value}")
+                
+                record_text = " ".join(col_val_parts)
+                
+                record = {
+                    "left": record_text,
+                    "right": record_text,
+                    "id": idx
+                }
+                records.append(record)
+            
+            return records
+        
+        def convert_to_ditto_format(df, matching_mode):
+            structure = detect_table_structure(df)
+            
+            # Override detection if mode is specified
+            if matching_mode == 'production':
+                structure['type'] = 'production'
+            elif matching_mode == 'testing':
+                structure['type'] = 'testing'
+            
+            print(structure['message'])
+            
+            if structure['type'] == 'production':
+                if not structure['matching_fields']:
+                    raise ValueError("Production mode requires _left/_right column pairs, but none were found!")
+                return convert_production_format(df, structure)
+            else:
+                return convert_testing_format(df, structure)
+        
+        ditto_records = convert_to_ditto_format(df, matching_mode)
+        print(f"✅ Converted {len(ditto_records)} records to DITTO format")
+        
+        # Save to JSONL file in the format expected by matcher.py
+        with open(output_path, 'w', encoding='utf-8') as f:
+            for record in ditto_records:
+                # Convert to matcher.py expected format: [left_record, right_record]
+                matcher_record = [record['left'], record['right']]
+                f.write(json.dumps(matcher_record, ensure_ascii=False) + '\n')
+        
+        print(f"💾 Saved to: {output_path}")
+        
+        connection.close()
         return output_path
+        
     except Exception as e:
         print(f"Error in extract_hive_data_func: {str(e)}")
         raise
-    finally:
-        extractor.close()
 
 
 def run_ditto_matching_func(
@@ -239,15 +368,14 @@ save_results_to_hive_op = create_component_from_func(
     packages_to_install=['pyhive', 'pandas', 'thrift', 'sasl']
 )
 
-def generate_pipeline_name(table1: str, table2: str) -> str:
-    """Generate a unique pipeline name based on tables and timestamp."""
+def generate_pipeline_name(input_table: str, match_type: str = "self") -> str:
+    """Generate a unique pipeline name based on table and timestamp."""
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    table1_safe = str(table1).split('.')[-1]
-    table2_safe = str(table2).split('.')[-1]
-    return f"Ditto_Matching_{table1_safe}_{table2_safe}_{timestamp}"
+    table_safe = str(input_table).split('.')[-1]
+    return f"Ditto_Matching_{table_safe}_{match_type}_{timestamp}"
 
 @dsl.pipeline(
-    name=generate_pipeline_name("{{table1}}", "{{table2}}"),
+    name=generate_pipeline_name("{{input_table}}", "self"),
     description="Ditto Entity Matching Pipeline with Hive Integration"
 )
 def ditto_matching_pipeline(
@@ -257,13 +385,14 @@ def ditto_matching_pipeline(
     hive_user: str = "hive",
     hive_database: str = "default",
     
-    # Input tables
-    table1: str = "database.table1",
-    table2: str = "database.table2",
+    # Input table
+    input_table: str = "database.table",
     
     # Data limits (for testing)
-    table1_limit: Optional[int] = None,
-    table2_limit: Optional[int] = None,
+    sample_limit: Optional[int] = None,
+    
+    # Matching mode
+    matching_mode: str = 'auto',
     
     # Ditto model parameters
     model_task: str = "wdc_all_small",
@@ -303,17 +432,16 @@ def ditto_matching_pipeline(
         modes=dsl.VOLUME_MODE_RWO
     )
     
-    # Step 1: Extract data from Hive tables and create pairs
+    # Step 1: Extract data from Hive table and create pairs
     extract_data = extract_hive_data_op(
         hive_host=hive_host,
         hive_port=hive_port,
         hive_user=hive_user,
         hive_database=hive_database,
-        table1=table1,
-        table2=table2,
+        input_table=input_table,
         output_path="/data/input/test_pairs.jsonl",
-        table1_limit=table1_limit,
-        table2_limit=table2_limit
+        sample_limit=sample_limit,
+        matching_mode=matching_mode
     )
     
     # Add volume and environment variables
@@ -362,8 +490,7 @@ def ditto_matching_pipeline(
 
 
 def compile_pipeline(
-    table1: str,
-    table2: str,
+    input_table: str,
     hive_host: str = "localhost",
     output_file: str = "ditto-matching-pipeline.yaml"
 ):
@@ -375,11 +502,10 @@ def compile_pipeline(
             type_check=True
         )
         
-        pipeline_name = generate_pipeline_name(table1, table2)
+        pipeline_name = generate_pipeline_name(input_table, "self")
         print(f"\nDitto Matching Pipeline '{pipeline_name}' compiled successfully!")
         print(f"Pipeline file: {os.path.abspath(output_file)}")
-        print(f"Table 1: {table1}")
-        print(f"Table 2: {table2}")
+        print(f"Input table: {input_table}")
         print(f"Hive Host: {hive_host}")
         print("\nYou can now upload this pipeline to your Kubeflow deployment.")
         
@@ -393,8 +519,7 @@ def main():
     parser = argparse.ArgumentParser(description="Compile Ditto Matching Kubeflow Pipeline")
     
     # Required arguments
-    parser.add_argument("--table1", required=True, help="First Hive table (database.table)")
-    parser.add_argument("--table2", required=True, help="Second Hive table (database.table)")
+    parser.add_argument("--input-table", required=True, help="Input Hive table (database.table)")
     parser.add_argument("--hive-host", required=True, help="Hive server host")
     
     # Optional arguments
@@ -408,8 +533,7 @@ def main():
         CACHE_ENABLED = False
     
     compile_pipeline(
-        table1=args.table1,
-        table2=args.table2,
+        input_table=args.input_table,
         hive_host=args.hive_host,
         output_file=args.output
     )

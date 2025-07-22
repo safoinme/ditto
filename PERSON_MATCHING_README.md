@@ -28,7 +28,7 @@ pip install pandas scikit-learn
 # Install Ditto requirements (if not already done)
 pip install -r requirements.txt
 conda install -c conda-forge nvidia-apex  # For fp16 training
-python -m spacy download en_core_web_lg
+python -m spacy download en_core_web_sm
 ```
 
 ## Quick Start

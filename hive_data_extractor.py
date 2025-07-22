@@ -66,7 +66,68 @@ class HiveDataExtractor:
         except Exception as e:
             raise RuntimeError(f"Failed to extract data from {table_name}: {str(e)}")
     
-    def create_cartesian_pairs(self, table1_df: pd.DataFrame, table2_df: pd.DataFrame) -> List[Dict]:
+    def convert_to_ditto_format(self, df: pd.DataFrame) -> List[str]:
+        """
+        Convert DataFrame to DITTO COL/VAL format, removing table name prefixes from columns.
+        
+        Args:
+            df: DataFrame with columns that may have tablename.column format
+            
+        Returns:
+            List of DITTO formatted strings
+        """
+        records = []
+        
+        print(f"🔍 Original columns: {list(df.columns)}")
+        
+        # Show sample of table prefixes detected
+        table_prefixes = set()
+        for col in df.columns:
+            if '.' in col:
+                prefix = col.split('.')[0]
+                table_prefixes.add(prefix)
+        
+        if table_prefixes:
+            print(f"🏷️  Detected table prefixes: {list(table_prefixes)}")
+        else:
+            print("ℹ️  No table prefixes detected")
+        
+        for idx, row in df.iterrows():
+            # Convert row to COL/VAL format
+            col_val_parts = []
+            
+            for col in df.columns:
+                if pd.notna(row[col]) and str(row[col]).strip():
+                    # Remove table name prefix if present
+                    if '.' in col:
+                        # Split by first dot only, in case there are multiple dots
+                        clean_col = col.split('.', 1)[1]
+                        print(f"🔧 Column: {col} -> {clean_col}") if idx == 0 else None  # Show for first record only
+                    else:
+                        clean_col = col
+                    
+                    value = str(row[col]).strip()
+                    col_val_parts.append(f"COL {clean_col} VAL {value}")
+            
+            record_text = " ".join(col_val_parts)
+            records.append(record_text)
+        
+        print(f"✅ Successfully converted {len(records)} records")
+        
+        # Show column transformation summary
+        if table_prefixes:
+            print("\n📋 Column transformations applied:")
+            sample_cols = [col for col in df.columns if '.' in col][:5]  # Show first 5
+            for col in sample_cols:
+                clean_col = col.split('.', 1)[1]
+                print(f"  {col} → {clean_col}")
+            if len([col for col in df.columns if '.' in col]) > 5:
+                remaining = len([col for col in df.columns if '.' in col]) - 5
+                print(f"  ... and {remaining} more columns")
+        
+        return records
+
+    def create_cartesian_pairs(self, table1_df: pd.DataFrame, table2_df: pd.DataFrame) -> List[List[str]]:
         """
         Create cartesian product pairs between two dataframes for ditto matching.
         
@@ -75,41 +136,50 @@ class HiveDataExtractor:
             table2_df: Second dataframe
             
         Returns:
-            List of dictionaries in ditto format
+            List of [left_record, right_record] pairs in DITTO format
         """
+        # Convert dataframes to DITTO format
+        table1_records = self.convert_to_ditto_format(table1_df)
+        table2_records = self.convert_to_ditto_format(table2_df)
+        
         pairs = []
         
-        for _, row1 in table1_df.iterrows():
-            for _, row2 in table2_df.iterrows():
-                # Convert rows to dictionaries, handling NaN values
-                dict1 = row1.to_dict()
-                dict2 = row2.to_dict()
-                
-                # Clean up NaN values
-                dict1 = {k: (str(v) if pd.notna(v) else "") for k, v in dict1.items()}
-                dict2 = {k: (str(v) if pd.notna(v) else "") for k, v in dict2.items()}
-                
-                pairs.append([dict1, dict2])
+        for record1 in table1_records:
+            for record2 in table2_records:
+                # Each pair is a list with [left_record, right_record] as expected by matcher.py
+                pairs.append([record1, record2])
         
         print(f"Created {len(pairs)} pairs from cartesian product")
         return pairs
     
-    def save_pairs_to_jsonl(self, pairs: List[Dict], output_path: str):
+    def save_pairs_to_jsonl(self, pairs: List[List[str]], output_path: str):
         """
         Save pairs to JSONL format for ditto processing.
         
         Args:
-            pairs: List of pairs to save
+            pairs: List of [left_record, right_record] pairs to save
             output_path: Output file path
         """
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
-        with open(output_path, 'w') as f:
+        with open(output_path, 'w', encoding='utf-8') as f:
             for pair in pairs:
-                json.dump(pair, f)
+                # Each pair is already a list [left_record, right_record] as expected by matcher.py
+                json.dump(pair, f, ensure_ascii=False)
                 f.write('\n')
         
         print(f"Saved {len(pairs)} pairs to {output_path}")
+        
+        # Show sample records for verification
+        print("\n📋 Sample JSONL format for matcher:")
+        with open(output_path, 'r', encoding='utf-8') as f:
+            for i, line in enumerate(f):
+                if i >= 3:  # Show first 3 lines
+                    break
+                sample_data = json.loads(line)
+                print(f"\nLine {i+1}: {len(sample_data)} elements")
+                print(f"  [0]: {sample_data[0][:80]}...")
+                print(f"  [1]: {sample_data[1][:80]}...")
     
     def extract_and_pair(self, table1: str, table2: str, output_path: str, 
                         table1_limit: Optional[int] = None, table2_limit: Optional[int] = None):

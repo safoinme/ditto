@@ -51,8 +51,7 @@ kubectl apply -f ditto-config.yaml
 
 ```bash
 python ditto_kubeflow_pipeline.py \
-    --table1 "database1.source_table" \
-    --table2 "database2.reference_table" \
+    --input-table "database.source_table" \
     --hive-host "your-hive-host" \
     --output "my-ditto-pipeline.yaml"
 ```
@@ -64,16 +63,14 @@ Upload `my-ditto-pipeline.yaml` to your Kubeflow Pipelines UI and create a run w
 ## Pipeline Parameters
 
 ### Required Parameters
-- `table1` - First Hive table (format: database.table)
-- `table2` - Second Hive table (format: database.table)
+- `input_table` - Input Hive table (format: database.table)
 - `hive_host` - Hive server hostname/IP
 - `hive_user` - Hive username
 
 ### Optional Parameters
 - `hive_port` - Hive server port (default: 10000)
 - `hive_database` - Hive database (default: "default")
-- `table1_limit` - Limit rows from first table (for testing)
-- `table2_limit` - Limit rows from second table (for testing)
+- `sample_limit` - Limit rows from table (for testing)
 - `model_task` - Ditto model task (default: "wdc_all_small")
 - `lm` - Language model (default: "distilbert")
 - `max_len` - Max sequence length (default: 64)
@@ -86,19 +83,17 @@ Upload `my-ditto-pipeline.yaml` to your Kubeflow Pipelines UI and create a run w
 
 ## Example Usage
 
-### Basic Matching
+### Basic Self-Matching
 ```bash
 python ditto_kubeflow_pipeline.py \
-    --table1 "sales_db.customers" \
-    --table2 "crm_db.contacts" \
+    --input-table "sales_db.customers" \
     --hive-host "hive.company.com"
 ```
 
 ### With Optimizations
 ```bash
 python ditto_kubeflow_pipeline.py \
-    --table1 "sales_db.products" \
-    --table2 "catalog_db.items" \
+    --input-table "sales_db.products" \
     --hive-host "hive.company.com" \
     --output "product-matching-pipeline.yaml"
 ```
@@ -107,9 +102,10 @@ python ditto_kubeflow_pipeline.py \
 
 ### 1. Data Extraction (`extract_hive_data_func`)
 - Connects to Hive using provided credentials
-- Extracts data from both specified tables
-- Creates cartesian product pairs in JSONL format
-- Saves to `/data/input/test_pairs.jsonl`
+- Extracts data from specified table
+- Removes table name prefixes from column names (tablename.column → column)
+- Converts to DITTO COL/VAL format and creates self-matching pairs
+- Saves to `/data/input/test_pairs.jsonl` in correct format for matcher.py
 
 ### 2. Ditto Matching (`run_ditto_matching_func`)
 - Loads the specified pre-trained Ditto model
