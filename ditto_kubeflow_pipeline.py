@@ -370,9 +370,10 @@ save_results_to_hive_op = create_component_from_func(
 
 def generate_pipeline_name(input_table: str, match_type: str = "self") -> str:
     """Generate a unique pipeline name based on table and timestamp."""
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
     table_safe = str(input_table).split('.')[-1]
-    return f"Ditto_Matching_{table_safe}_{match_type}_{timestamp}"
+    pipeline_name = f"ditto-matching-{table_safe}-{match_type}-{timestamp}"
+    return pipeline_name.lower().replace('_', '-')
 
 @dsl.pipeline(
     name=generate_pipeline_name("{{input_table}}", "self"),
@@ -380,7 +381,7 @@ def generate_pipeline_name(input_table: str, match_type: str = "self") -> str:
 )
 def ditto_matching_pipeline(
     # Hive connection parameters
-    hive_host: str = "localhost",
+    hive_host: str = "172.17.235.21",
     hive_port: int = 10000,
     hive_user: str = "hive",
     hive_database: str = "default",
