@@ -20,18 +20,13 @@ def extract_hive_data_func(
     hive_user: str,
     hive_database: str,
     input_table: str,
-    output_path: str,
     sample_limit: Optional[int] = None,
     matching_mode: str = 'auto'
 ) -> str:
-    """Extract data from Hive table and convert to DITTO format for matching."""
+    """Extract data from Hive table and return DITTO format data as string."""
     from pyhive import hive
     import pandas as pd
     import json
-    import os
-    
-    # Ensure output directory exists
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
     try:
         # Connect to Hive
@@ -52,7 +47,7 @@ def extract_hive_data_func(
         print(f"Extracted {len(df)} records from {input_table}")
         print(f"Columns: {list(df.columns)}")
         
-        # Detect and convert to DITTO format
+        # Detect and convert to DITTO format (same logic as before)
         def detect_table_structure(df):
             columns = list(df.columns)
             clean_columns = []
@@ -168,25 +163,25 @@ def extract_hive_data_func(
         ditto_records = convert_to_ditto_format(df, matching_mode)
         print(f"Converted {len(ditto_records)} records to DITTO format")
         
-        # Save to JSONL file in the format expected by matcher.py
-        with open(output_path, 'w', encoding='utf-8') as f:
-            for record in ditto_records:
-                # Convert to matcher.py expected format: [left_record, right_record]
-                matcher_record = [record['left'], record['right']]
-                f.write(json.dumps(matcher_record, ensure_ascii=True) + '\n')
+        # Return data as JSONL string instead of writing to file
+        jsonl_lines = []
+        for record in ditto_records:
+            # Convert to matcher.py expected format: [left_record, right_record]
+            matcher_record = [record['left'], record['right']]
+            jsonl_lines.append(json.dumps(matcher_record, ensure_ascii=True))
         
-        print(f"Saved to: {output_path}")
+        jsonl_data = '\n'.join(jsonl_lines)
+        print(f"Generated {len(jsonl_lines)} JSONL records")
         
         connection.close()
-        return output_path
+        return jsonl_data
         
     except Exception as e:
         print(f"Error in extract_hive_data_func: {str(e)}")
         raise
 
 def run_ditto_matching_func(
-    input_path: str,
-    output_path: str,
+    input_data: str,
     model_task: str = "person_records",
     checkpoint_path: str = "/checkpoints/",
     lm: str = "bert",
@@ -194,57 +189,69 @@ def run_ditto_matching_func(
     use_gpu: bool = True,
     fp16: bool = True,
     summarize: bool = False
-) -> NamedTuple('Outputs', [('output_path', str), ('metrics', dict)]):
-    """Run ditto matching on the input pairs."""
+) -> NamedTuple('Outputs', [('results_data', str), ('metrics', dict)]):
+    """Run ditto matching on the input pairs data."""
     import subprocess
     import os
     import json
     import jsonlines
+    import tempfile
     from collections import namedtuple
     
-    # Ensure output directory exists
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    # Write input data to temporary file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as temp_input:
+        temp_input.write(input_data)
+        input_path = temp_input.name
     
-    # Build matcher command
-    cmd = [
-        "python", "/app/ditto/matcher.py",
-        "--task", model_task,
-        "--input_path", input_path,
-        "--output_path", output_path,
-        "--lm", lm,
-        "--max_len", str(max_len),
-        "--checkpoint_path", checkpoint_path
-    ]
-    
-    if use_gpu:
-        cmd.append("--use_gpu")
-    if fp16:
-        cmd.append("--fp16")
-    if summarize:
-        cmd.append("--summarize")
+    # Create temporary output file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as temp_output:
+        output_path = temp_output.name
     
     try:
+        # Build matcher command
+        cmd = [
+            "python", "/app/ditto/matcher.py",
+            "--task", model_task,
+            "--input_path", input_path,
+            "--output_path", output_path,
+            "--lm", lm,
+            "--max_len", str(max_len),
+            "--checkpoint_path", checkpoint_path
+        ]
+        
+        if use_gpu:
+            cmd.append("--use_gpu")
+        if fp16:
+            cmd.append("--fp16")
+        if summarize:
+            cmd.append("--summarize")
+        
         # Run matcher
         print(f"Running command: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         print(f"Matcher stdout: {result.stdout}")
         
-        # Calculate metrics from output
+        # Read results and return as string
+        results_data = ""
         metrics = {"total_pairs": 0, "matches": 0, "non_matches": 0}
         
         if os.path.exists(output_path):
             with jsonlines.open(output_path) as reader:
+                results_lines = []
                 for line in reader:
+                    results_lines.append(json.dumps(line))
                     metrics["total_pairs"] += 1
                     if line.get('match', 0) == 1:
                         metrics["matches"] += 1
                     else:
                         metrics["non_matches"] += 1
+                
+                results_data = '\n'.join(results_lines)
         
         print(f"Matching completed. Metrics: {metrics}")
         
-        output = namedtuple('Outputs', ['output_path', 'metrics'])
-        return output(output_path, metrics)
+        output = namedtuple('Outputs', ['results_data', 'metrics'])
+        return output(results_data, metrics)
         
     except subprocess.CalledProcessError as e:
         print(f"Matcher failed with error: {e}")
@@ -253,9 +260,14 @@ def run_ditto_matching_func(
     except Exception as e:
         print(f"Error in run_ditto_matching_func: {str(e)}")
         raise
+    finally:
+        # Clean up temporary files
+        for temp_file in [input_path, output_path]:
+            if os.path.exists(temp_file):
+                os.unlink(temp_file)
 
 def save_results_to_hive_func(
-    results_path: str,
+    results_data: str,
     hive_host: str,
     hive_port: int,
     hive_user: str,
@@ -263,27 +275,28 @@ def save_results_to_hive_func(
     output_table: str,
     save_results: bool = True
 ) -> str:
-    """Optionally save matching results back to Hive."""
+    """Save matching results to Hive from results data string."""
     if not save_results:
         print("Skipping Hive save as save_results is False")
         return "Skipped"
     
     from pyhive import hive
     import pandas as pd
-    import jsonlines
+    import json
     import tempfile
     import os
     
     try:
-        # Read results
+        # Parse results data
         results = []
-        with jsonlines.open(results_path) as reader:
-            for line in reader:
+        for line in results_data.strip().split('\n'):
+            if line.strip():
+                result = json.loads(line)
                 results.append({
-                    'left_record': json.dumps(line.get('left', {})),
-                    'right_record': json.dumps(line.get('right', {})),
-                    'match': line.get('match', 0),
-                    'match_confidence': line.get('match_confidence', 0.0),
+                    'left_record': json.dumps(result.get('left', {})),
+                    'right_record': json.dumps(result.get('right', {})),
+                    'match': result.get('match', 0),
+                    'match_confidence': result.get('match_confidence', 0.0),
                     'processing_timestamp': datetime.now().isoformat()
                 })
         
@@ -368,10 +381,10 @@ def generate_pipeline_name(input_table: str) -> str:
     return f"ditto-matching-{table_safe}-{timestamp}"
 
 @dsl.pipeline(
-    name="ditto-entity-matching",
-    description="Ditto Entity Matching Pipeline with Hive Integration"
+    name="ditto-entity-matching-no-pvc",
+    description="Ditto Entity Matching Pipeline without PVC - uses step outputs"
 )
-def ditto_entity_matching_pipeline(
+def ditto_entity_matching_pipeline_no_pvc(
     # Hive connection parameters
     hive_host: str = "172.17.235.21",
     hive_port: int = 10000,
@@ -401,9 +414,9 @@ def ditto_entity_matching_pipeline(
     output_table: str = "ditto_matching_results"
 ):
     """
-    Complete Ditto matching pipeline that:
-    1. Extracts data from Hive table
-    2. Runs ditto matching
+    Complete Ditto matching pipeline without PVC that:
+    1. Extracts data from Hive table and returns as string
+    2. Runs ditto matching on string data
     3. Optionally saves results back to Hive
     """
     
@@ -415,38 +428,26 @@ def ditto_entity_matching_pipeline(
         V1EnvVar(name='HIVE_DATABASE', value=hive_database)
     ]
     
-    # Use existing shared PVC instead of creating new ones
-    from kubernetes import client as k8s_client
-    
-    # Define the shared PVC name
-    shared_pvc_name = "ditto-shared-data-pvc"
-    
-    # Create volume reference to existing PVC
-    vop = dsl.PipelineVolume(pvc=shared_pvc_name)
-    
-    # Step 1: Extract data from Hive table and create pairs
+    # Step 1: Extract data from Hive table
     extract_data = extract_hive_data_op(
         hive_host=hive_host,
         hive_port=hive_port,
         hive_user=hive_user,
         hive_database=hive_database,
         input_table=input_table,
-        output_path="/data/input/test_pairs.jsonl",
         sample_limit=sample_limit,
         matching_mode=matching_mode
     )
     
-    # Add volume and environment variables
-    extract_data.add_pvolumes({'/data': vop})
+    # Add environment variables (no volume needed)
     for env_var in env_vars:
         extract_data.add_env_variable(env_var)
     extract_data.set_display_name('Extract Data from Hive')
     extract_data.set_caching_options(enable_caching=CACHE_ENABLED)
     
-    # Step 2: Run ditto matching
+    # Step 2: Run ditto matching using output from step 1
     matching_results = run_ditto_matching_op(
-        input_path="/data/input/test_pairs.jsonl",
-        output_path="/data/output/matching_results.jsonl",
+        input_data=extract_data.output,  # Use output from previous step
         model_task=model_task,
         checkpoint_path=checkpoint_path,
         lm=lm,
@@ -456,17 +457,16 @@ def ditto_entity_matching_pipeline(
         summarize=summarize
     ).after(extract_data)
     
-    # Add volume and GPU resources
-    matching_results.add_pvolumes({'/data': vop, '/checkpoints': vop})
+    # Add GPU resources (no volume needed)
     matching_results.set_display_name('Run DITTO Matching')  
     matching_results.set_gpu_limit(1)
     matching_results.set_memory_limit('8Gi')
     matching_results.set_cpu_limit('4')
     matching_results.set_caching_options(enable_caching=False)  # Don't cache matching results
     
-    # Step 3: Optionally save results to Hive
+    # Step 3: Optionally save results to Hive using output from step 2
     save_results = save_results_to_hive_op(
-        results_path="/data/output/matching_results.jsonl",
+        results_data=matching_results.outputs['results_data'],  # Use output from previous step
         hive_host=hive_host,
         hive_port=hive_port,
         hive_user=hive_user,
@@ -475,8 +475,7 @@ def ditto_entity_matching_pipeline(
         save_results=save_to_hive
     ).after(matching_results)
     
-    # Add volume and environment variables
-    save_results.add_pvolumes({'/data': vop})
+    # Add environment variables (no volume needed)
     for env_var in env_vars:
         save_results.add_env_variable(env_var)
     save_results.set_display_name('Save Results to Hive')
@@ -485,12 +484,12 @@ def ditto_entity_matching_pipeline(
 def compile_pipeline(
     input_table: str = "model_reference",
     hive_host: str = "172.17.235.21",
-    pipeline_file: str = "ditto-pipeline.yaml"
+    pipeline_file: str = "ditto-pipeline-no-pvc.yaml"
 ):
-    """Compile the Ditto matching pipeline."""
+    """Compile the Ditto matching pipeline without PVC."""
     try:
         compiler.Compiler().compile(
-            pipeline_func=ditto_entity_matching_pipeline,
+            pipeline_func=ditto_entity_matching_pipeline_no_pvc,
             package_path=pipeline_file,
             type_check=True
         )
@@ -500,6 +499,7 @@ def compile_pipeline(
         print(f"Pipeline file: {os.path.abspath(pipeline_file)}")
         print(f"Input table: {input_table}")
         print(f"Hive Host: {hive_host}")
+        print("✅ No PVC required - uses step outputs for data passing")
         
         return pipeline_file
         
@@ -509,7 +509,7 @@ def compile_pipeline(
 
 def main():
     """Command line interface for pipeline compilation."""
-    parser = argparse.ArgumentParser(description="Ditto Matching Kubeflow Pipeline")
+    parser = argparse.ArgumentParser(description="Ditto Matching Kubeflow Pipeline (No PVC)")
     
     # Action flags
     parser.add_argument("--compile", action="store_true", help="Compile the pipeline")
@@ -518,7 +518,7 @@ def main():
     parser.add_argument("--input-table", default="model_reference", 
                        help="Input Hive table")
     parser.add_argument("--hive-host", default="172.17.235.21", help="Hive server host")
-    parser.add_argument("--output", default="ditto-pipeline.yaml", help="Output pipeline file")
+    parser.add_argument("--output", default="ditto-pipeline-no-pvc.yaml", help="Output pipeline file")
     parser.add_argument("--no-cache", action="store_true", help="Disable caching")
     
     args = parser.parse_args()
@@ -534,15 +534,15 @@ def main():
             pipeline_file=args.output
         )
         print(f"\nPipeline Steps:")
-        print("1. Extract Data from Hive - Extract and format data for DITTO")
-        print("2. Run DITTO Matching - Entity matching using DITTO model")
-        print("3. Save Results to Hive - Store matching results back to Hive")
+        print("1. Extract Data from Hive - Extract and return data as string output")
+        print("2. Run DITTO Matching - Process input string data, return results as string")
+        print("3. Save Results to Hive - Process results string and save to Hive")
         print(f"\nUsage: Upload {args.output} to your Kubeflow Pipelines UI")
         return pipeline_file
     else:
         print("Use --compile flag to compile the pipeline")
-        print("Example: python ditto_kubeflow_pipeline.py --compile")
-        print("Example: python ditto_kubeflow_pipeline.py --compile --input-table your_table --hive-host your_host")
+        print("Example: python ditto_kubeflow_pipeline_no_pvc.py --compile")
+        print("Example: python ditto_kubeflow_pipeline_no_pvc.py --compile --input-table your_table --hive-host your_host")
         return None
 
 if __name__ == "__main__":
