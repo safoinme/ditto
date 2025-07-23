@@ -448,7 +448,7 @@ def compile_pipeline(
         print(f"Pipeline file: {os.path.abspath(pipeline_file)}")
         print(f"Input table: {input_table}")
         print(f"Hive Host: {hive_host}")
-        print("✅ No PVC or intermediate storage - pure streaming approach")
+        print("No PVC or intermediate storage - pure streaming approach")
         
         return pipeline_file
         

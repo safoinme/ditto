@@ -49,18 +49,18 @@ def extract_and_process_ditto_func(
                     gpu_count = torch.cuda.device_count()
                     current_device = torch.cuda.current_device()
                     gpu_name = torch.cuda.get_device_name(current_device)
-                    print(f"✅ GPU Available: {gpu_name}")
-                    print(f"✅ GPU Count: {gpu_count}")
-                    print(f"✅ Current Device: {current_device}")
+                    print(f"GPU Available: {gpu_name}")
+                    print(f"GPU Count: {gpu_count}")
+                    print(f"Current Device: {current_device}")
                     
                     # Set CUDA environment variables
                     os.environ['CUDA_VISIBLE_DEVICES'] = '0'
                     os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
                 else:
-                    print("⚠️  GPU requested but not available, falling back to CPU")
+                    print("WARNING: GPU requested but not available, falling back to CPU")
                     use_gpu = False
             except ImportError:
-                print("⚠️  PyTorch not available, falling back to CPU")
+                print("WARNING: PyTorch not available, falling back to CPU")
                 use_gpu = False
         else:
             print("=== CPU MODE ===")
@@ -81,7 +81,7 @@ def extract_and_process_ditto_func(
             query += f" LIMIT {sample_limit}"
         
         df = pd.read_sql(query, connection)
-        print(f"✅ Extracted {len(df)} records from {input_table}")
+        print(f"Extracted {len(df)} records from {input_table}")
         connection.close()
         
         print("=== STEP 2: Convert to DITTO format ===")
@@ -104,10 +104,10 @@ def extract_and_process_ditto_func(
             
             if matching_fields:
                 structure_type = "production"
-                message = f"🏭 Production table detected with {len(matching_fields)} matching field pairs"
+                message = f"Production table detected with {len(matching_fields)} matching field pairs"
             else:
                 structure_type = "testing"
-                message = f"🧪 Testing table detected with {len(clean_columns)} fields for self-matching"
+                message = f"Testing table detected with {len(clean_columns)} fields for self-matching"
             
             return {
                 'type': structure_type,
@@ -189,7 +189,7 @@ def extract_and_process_ditto_func(
                 return convert_testing_format(df, structure)
         
         ditto_records = convert_to_ditto_format(df, matching_mode)
-        print(f"✅ Converted {len(ditto_records)} records to DITTO format")
+        print(f"Converted {len(ditto_records)} records to DITTO format")
         
         print("=== STEP 3: Run DITTO Matching with GPU ===")
         # Write to temporary input file
@@ -216,13 +216,13 @@ def extract_and_process_ditto_func(
             
             if use_gpu:
                 cmd.append("--use_gpu")
-                print("🚀 Running DITTO with GPU acceleration")
+                print("Running DITTO with GPU acceleration")
             else:
-                print("🔄 Running DITTO with CPU")
+                print("Running DITTO with CPU")
                 
             if fp16 and use_gpu:  # FP16 only makes sense with GPU
                 cmd.append("--fp16")
-                print("⚡ Using FP16 mixed precision")
+                print("Using FP16 mixed precision")
                 
             if summarize:
                 cmd.append("--summarize")
@@ -233,9 +233,9 @@ def extract_and_process_ditto_func(
                 env['CUDA_VISIBLE_DEVICES'] = '0'
                 env['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
             
-            print(f"🏃 Running DITTO command: {' '.join(cmd)}")
+            print(f"Running DITTO command: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
-            print(f"✅ DITTO completed successfully")
+            print(f"DITTO completed successfully")
             if result.stdout:
                 print(f"DITTO Output: {result.stdout}")
             
@@ -255,7 +255,7 @@ def extract_and_process_ditto_func(
                             else:
                                 metrics["non_matches"] += 1
             
-            print(f"📊 Processing completed. Metrics: {metrics}")
+            print(f"Processing completed. Metrics: {metrics}")
             
             return {
                 "results": results,
@@ -271,7 +271,7 @@ def extract_and_process_ditto_func(
                     os.unlink(temp_file)
                     
     except Exception as e:
-        print(f"❌ Error in extract_and_process_ditto_func: {str(e)}")
+        print(f"ERROR in extract_and_process_ditto_func: {str(e)}")
         return {
             "results": [],
             "metrics": {"total_pairs": 0, "matches": 0, "non_matches": 0},
@@ -290,11 +290,11 @@ def save_results_to_hive_func(
 ) -> str:
     """Save processing results to Hive."""
     if not save_results:
-        print("⏭️  Skipping Hive save as save_results is False")
+        print("Skipping Hive save as save_results is False")
         return "Skipped"
     
     if processing_results.get("status") != "success":
-        return f"❌ Cannot save results due to processing error: {processing_results.get('status', 'unknown error')}"
+        return f"ERROR: Cannot save results due to processing error: {processing_results.get('status', 'unknown error')}"
     
     from pyhive import hive
     import pandas as pd
@@ -305,7 +305,7 @@ def save_results_to_hive_func(
     try:
         results_data = processing_results.get("results", [])
         if not results_data:
-            print("📝 No results to save")
+            print("No results to save")
             return "No results"
         
         # Convert results to DataFrame
@@ -361,7 +361,7 @@ def save_results_to_hive_func(
             cursor.execute(load_sql)
             
             gpu_status = "with GPU" if processing_results.get('gpu_used') else "with CPU"
-            print(f"✅ Successfully saved {len(processed_results)} results to {output_table} (processed {gpu_status})")
+            print(f"Successfully saved {len(processed_results)} results to {output_table} (processed {gpu_status})")
             return f"Saved {len(processed_results)} results to {output_table} (processed {gpu_status})"
             
         finally:
@@ -372,7 +372,7 @@ def save_results_to_hive_func(
         connection.close()
         
     except Exception as e:
-        print(f"❌ Error saving to Hive: {str(e)}")
+        print(f"ERROR saving to Hive: {str(e)}")
         return f"Error: {str(e)}"
 
 # Create Kubeflow components
@@ -523,11 +523,11 @@ def compile_pipeline(
             type_check=True
         )
         
-        print(f"\n🚀 GPU-Enabled Pipeline compiled successfully!")
-        print(f"📄 Pipeline file: {os.path.abspath(pipeline_file)}")
-        print(f"🗄️  Input table: {input_table}")
-        print(f"🖥️  Hive Host: {hive_host}")
-        print("🎮 GPU Support: Properly configured with:")
+        print(f"\nGPU-Enabled Pipeline compiled successfully!")
+        print(f"Pipeline file: {os.path.abspath(pipeline_file)}")
+        print(f"Input table: {input_table}")
+        print(f"Hive Host: {hive_host}")
+        print("GPU Support: Properly configured with:")
         print("   - NVIDIA GPU resource requests/limits")
         print("   - GPU node selection")
         print("   - CUDA environment variables")
@@ -536,7 +536,7 @@ def compile_pipeline(
         return pipeline_file
         
     except Exception as e:
-        print(f"❌ Error compiling pipeline: {str(e)}")
+        print(f"ERROR compiling pipeline: {str(e)}")
         raise
 
 def main():
@@ -561,11 +561,11 @@ def main():
             hive_host=args.hive_host,
             pipeline_file=args.output
         )
-        print(f"\n📋 Pipeline Steps:")
+        print(f"\nPipeline Steps:")
         print("1. Extract from Hive + Run DITTO with GPU - All processing with GPU acceleration")
         print("2. Save Results to Hive - Store final results with GPU usage tracking")
-        print(f"\n💡 Usage: Upload {args.output} to your Kubeflow Pipelines UI")
-        print("🎯 Make sure your cluster has GPU nodes with NVIDIA drivers installed!")
+        print(f"\nUsage: Upload {args.output} to your Kubeflow Pipelines UI")
+        print("Make sure your cluster has GPU nodes with NVIDIA drivers installed!")
         return pipeline_file
     else:
         print("Use --compile flag to compile the pipeline")

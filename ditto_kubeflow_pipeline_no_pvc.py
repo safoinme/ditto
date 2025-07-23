@@ -499,7 +499,7 @@ def compile_pipeline(
         print(f"Pipeline file: {os.path.abspath(pipeline_file)}")
         print(f"Input table: {input_table}")
         print(f"Hive Host: {hive_host}")
-        print("✅ No PVC required - uses step outputs for data passing")
+        print("No PVC required - uses step outputs for data passing")
         
         return pipeline_file
         
