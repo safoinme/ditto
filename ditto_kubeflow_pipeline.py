@@ -7,11 +7,12 @@ from kfp.components import create_component_from_func
 from kubernetes.client.models import V1EnvVar
 import json
 import time
-import yaml
-import kfp
-import kfp.components as comp
 
 CACHE_ENABLED = True
+
+def safe_table_name(table: str) -> str:
+    """Return the table part of a fully-qualified hive table name."""
+    return table.split('.')[-1]
 
 def extract_hive_data_func(
     hive_host: str,
@@ -48,8 +49,8 @@ def extract_hive_data_func(
             query += f" LIMIT {sample_limit}"
         
         df = pd.read_sql(query, connection)
-        print(f"✅ Extracted {len(df)} records from {input_table}")
-        print(f"📊 Columns: {list(df.columns)}")
+        print(f"Extracted {len(df)} records from {input_table}")
+        print(f"Columns: {list(df.columns)}")
         
         # Detect and convert to DITTO format
         def detect_table_structure(df):
@@ -70,10 +71,10 @@ def extract_hive_data_func(
             
             if matching_fields:
                 structure_type = "production"
-                message = f"🏭 Production table detected with {len(matching_fields)} matching field pairs"
+                message = f"Production table detected with {len(matching_fields)} matching field pairs"
             else:
                 structure_type = "testing"
-                message = f"🧪 Testing table detected with {len(clean_columns)} fields for self-matching"
+                message = f"Testing table detected with {len(clean_columns)} fields for self-matching"
             
             return {
                 'type': structure_type,
@@ -165,16 +166,16 @@ def extract_hive_data_func(
                 return convert_testing_format(df, structure)
         
         ditto_records = convert_to_ditto_format(df, matching_mode)
-        print(f"✅ Converted {len(ditto_records)} records to DITTO format")
+        print(f"Converted {len(ditto_records)} records to DITTO format")
         
         # Save to JSONL file in the format expected by matcher.py
         with open(output_path, 'w', encoding='utf-8') as f:
             for record in ditto_records:
                 # Convert to matcher.py expected format: [left_record, right_record]
                 matcher_record = [record['left'], record['right']]
-                f.write(json.dumps(matcher_record, ensure_ascii=False) + '\n')
+                f.write(json.dumps(matcher_record, ensure_ascii=True) + '\n')
         
-        print(f"💾 Saved to: {output_path}")
+        print(f"Saved to: {output_path}")
         
         connection.close()
         return output_path
@@ -183,17 +184,15 @@ def extract_hive_data_func(
         print(f"Error in extract_hive_data_func: {str(e)}")
         raise
 
-
 def run_ditto_matching_func(
     input_path: str,
     output_path: str,
-    model_task: str = "wdc_all_small",
+    model_task: str = "person_records",
     checkpoint_path: str = "/checkpoints/",
-    lm: str = "distilbert",
+    lm: str = "bert",
     max_len: int = 64,
     use_gpu: bool = True,
     fp16: bool = True,
-    dk: Optional[str] = None,
     summarize: bool = False
 ) -> NamedTuple('Outputs', [('output_path', str), ('metrics', dict)]):
     """Run ditto matching on the input pairs."""
@@ -221,8 +220,6 @@ def run_ditto_matching_func(
         cmd.append("--use_gpu")
     if fp16:
         cmd.append("--fp16")
-    if dk:
-        cmd.extend(["--dk", dk])
     if summarize:
         cmd.append("--summarize")
     
@@ -256,7 +253,6 @@ def run_ditto_matching_func(
     except Exception as e:
         print(f"Error in run_ditto_matching_func: {str(e)}")
         raise
-
 
 def save_results_to_hive_func(
     results_path: str,
@@ -349,37 +345,33 @@ def save_results_to_hive_func(
         print(f"Error saving to Hive: {str(e)}")
         return f"Error: {str(e)}"
 
-
 # Create Kubeflow components
 extract_hive_data_op = create_component_from_func(
     func=extract_hive_data_func,
-    base_image='your-registry/ditto-kubeflow:latest',  # Replace with your image
-    packages_to_install=['pyhive', 'pandas', 'thrift', 'sasl']
+    base_image='172.17.232.16:9001/ditto:1.5',
 )
 
 run_ditto_matching_op = create_component_from_func(
     func=run_ditto_matching_func,
-    base_image='your-registry/ditto-kubeflow:latest',  # Replace with your image
+    base_image='172.17.232.16:9001/ditto:1.5',
 )
 
 save_results_to_hive_op = create_component_from_func(
     func=save_results_to_hive_func,
-    base_image='your-registry/ditto-kubeflow:latest',  # Replace with your image
-    packages_to_install=['pyhive', 'pandas', 'thrift', 'sasl']
+    base_image='172.17.232.16:9001/ditto:1.5',
 )
 
-def generate_pipeline_name(input_table: str, match_type: str = "self") -> str:
+def generate_pipeline_name(input_table: str) -> str:
     """Generate a unique pipeline name based on table and timestamp."""
-    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-    table_safe = str(input_table).split('.')[-1]
-    pipeline_name = f"ditto-matching-{table_safe}-{match_type}-{timestamp}"
-    return pipeline_name.lower().replace('_', '-')
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    table_safe = safe_table_name(input_table).replace('_', '-')
+    return f"ditto-matching-{table_safe}-{timestamp}"
 
 @dsl.pipeline(
-    name=generate_pipeline_name("{{input_table}}", "self"),
+    name="ditto-entity-matching",
     description="Ditto Entity Matching Pipeline with Hive Integration"
 )
-def ditto_matching_pipeline(
+def ditto_entity_matching_pipeline(
     # Hive connection parameters
     hive_host: str = "172.17.235.21",
     hive_port: int = 10000,
@@ -387,7 +379,7 @@ def ditto_matching_pipeline(
     hive_database: str = "default",
     
     # Input table
-    input_table: str = "database.table",
+    input_table: str = "model_reference",
     
     # Data limits (for testing)
     sample_limit: Optional[int] = None,
@@ -396,13 +388,12 @@ def ditto_matching_pipeline(
     matching_mode: str = 'auto',
     
     # Ditto model parameters
-    model_task: str = "wdc_all_small",
-    checkpoint_path: str = "/checkpoints/",
-    lm: str = "distilbert",
+    model_task: str = "person_records",
+    checkpoint_path: str = "/checkpoints",
+    lm: str = "bert",
     max_len: int = 64,
     use_gpu: bool = True,
     fp16: bool = True,
-    dk: Optional[str] = None,
     summarize: bool = False,
     
     # Output parameters
@@ -411,10 +402,9 @@ def ditto_matching_pipeline(
 ):
     """
     Complete Ditto matching pipeline that:
-    1. Extracts data from two Hive tables
-    2. Creates cartesian product pairs
-    3. Runs ditto matching
-    4. Optionally saves results back to Hive
+    1. Extracts data from Hive table
+    2. Runs ditto matching
+    3. Optionally saves results back to Hive
     """
     
     # Define environment variables for Hive connectivity
@@ -425,10 +415,11 @@ def ditto_matching_pipeline(
         V1EnvVar(name='HIVE_DATABASE', value=hive_database)
     ]
     
-    # Create PVC for data storage
+    # Create PVC for data storage with timestamp to avoid conflicts
+    timestamp = datetime.now().strftime('%Y%m%d%H%M')
     vop = dsl.VolumeOp(
-        name="create-data-pvc",
-        resource_name=f"ditto-data-pvc-{datetime.now().strftime('%Y%m%d%H%M')}",
+        name="create-pvc",
+        resource_name=f"ditto-data-pvc-{timestamp}",
         size="50Gi",
         modes=dsl.VOLUME_MODE_RWO
     )
@@ -449,6 +440,7 @@ def ditto_matching_pipeline(
     extract_data.add_pvolumes({'/data': vop.volume})
     for env_var in env_vars:
         extract_data.add_env_variable(env_var)
+    extract_data.set_display_name('Extract Data from Hive')
     extract_data.set_caching_options(enable_caching=CACHE_ENABLED)
     
     # Step 2: Run ditto matching
@@ -461,12 +453,12 @@ def ditto_matching_pipeline(
         max_len=max_len,
         use_gpu=use_gpu,
         fp16=fp16,
-        dk=dk,
         summarize=summarize
     ).after(extract_data)
     
     # Add volume and GPU resources
     matching_results.add_pvolumes({'/data': vop.volume, '/checkpoints': vop.volume})
+    matching_results.set_display_name('Run DITTO Matching')  
     matching_results.set_gpu_limit(1)
     matching_results.set_memory_limit('8Gi')
     matching_results.set_cpu_limit('4')
@@ -487,44 +479,46 @@ def ditto_matching_pipeline(
     save_results.add_pvolumes({'/data': vop.volume})
     for env_var in env_vars:
         save_results.add_env_variable(env_var)
+    save_results.set_display_name('Save Results to Hive')
     save_results.set_caching_options(enable_caching=False)
 
-
 def compile_pipeline(
-    input_table: str,
-    hive_host: str = "localhost",
-    output_file: str = "ditto-matching-pipeline.yaml"
+    input_table: str = "model_reference",
+    hive_host: str = "172.17.235.21",
+    pipeline_file: str = "ditto-pipeline.yaml"
 ):
     """Compile the Ditto matching pipeline."""
     try:
         compiler.Compiler().compile(
-            pipeline_func=ditto_matching_pipeline,
-            package_path=output_file,
+            pipeline_func=ditto_entity_matching_pipeline,
+            package_path=pipeline_file,
             type_check=True
         )
         
-        pipeline_name = generate_pipeline_name(input_table, "self")
-        print(f"\nDitto Matching Pipeline '{pipeline_name}' compiled successfully!")
-        print(f"Pipeline file: {os.path.abspath(output_file)}")
+        pipeline_name = generate_pipeline_name(input_table)
+        print(f"\nPipeline '{pipeline_name}' compiled successfully!")
+        print(f"Pipeline file: {os.path.abspath(pipeline_file)}")
         print(f"Input table: {input_table}")
         print(f"Hive Host: {hive_host}")
-        print("\nYou can now upload this pipeline to your Kubeflow deployment.")
+        
+        return pipeline_file
         
     except Exception as e:
         print(f"Error compiling pipeline: {str(e)}")
         raise
 
-
 def main():
     """Command line interface for pipeline compilation."""
-    parser = argparse.ArgumentParser(description="Compile Ditto Matching Kubeflow Pipeline")
+    parser = argparse.ArgumentParser(description="Ditto Matching Kubeflow Pipeline")
     
-    # Required arguments
-    parser.add_argument("--input-table", required=True, help="Input Hive table (database.table)")
-    parser.add_argument("--hive-host", required=True, help="Hive server host")
+    # Action flags
+    parser.add_argument("--compile", action="store_true", help="Compile the pipeline")
     
-    # Optional arguments
-    parser.add_argument("--output", default="ditto-matching-pipeline.yaml", help="Output pipeline file")
+    # Pipeline parameters (optional with defaults)
+    parser.add_argument("--input-table", default="model_reference", 
+                       help="Input Hive table")
+    parser.add_argument("--hive-host", default="172.17.235.21", help="Hive server host")
+    parser.add_argument("--output", default="ditto-pipeline.yaml", help="Output pipeline file")
     parser.add_argument("--no-cache", action="store_true", help="Disable caching")
     
     args = parser.parse_args()
@@ -533,12 +527,23 @@ def main():
     if args.no_cache:
         CACHE_ENABLED = False
     
-    compile_pipeline(
-        input_table=args.input_table,
-        hive_host=args.hive_host,
-        output_file=args.output
-    )
-
+    if args.compile:
+        pipeline_file = compile_pipeline(
+            input_table=args.input_table,
+            hive_host=args.hive_host,
+            pipeline_file=args.output
+        )
+        print(f"\nPipeline Steps:")
+        print("1. Extract Data from Hive - Extract and format data for DITTO")
+        print("2. Run DITTO Matching - Entity matching using DITTO model")
+        print("3. Save Results to Hive - Store matching results back to Hive")
+        print(f"\nUsage: Upload {args.output} to your Kubeflow Pipelines UI")
+        return pipeline_file
+    else:
+        print("Use --compile flag to compile the pipeline")
+        print("Example: python ditto_kubeflow_pipeline.py --compile")
+        print("Example: python ditto_kubeflow_pipeline.py --compile --input-table your_table --hive-host your_host")
+        return None
 
 if __name__ == "__main__":
     main()
