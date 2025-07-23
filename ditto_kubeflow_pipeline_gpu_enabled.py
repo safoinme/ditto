@@ -5,7 +5,6 @@ import os
 import argparse
 from kfp.components import create_component_from_func
 from kubernetes.client.models import V1EnvVar
-from kubernetes import client as k8s_client
 
 CACHE_ENABLED = True
 
@@ -387,10 +386,10 @@ save_results_to_hive_op = create_component_from_func(
 )
 
 @dsl.pipeline(
-    name="ditto-entity-matching-gpu",
-    description="Ditto Entity Matching Pipeline with proper GPU support"
+    name="ditto-entity-matching-gpu-fixed",
+    description="Ditto Entity Matching Pipeline with Kubeflow notebook-style GPU config"
 )
-def ditto_entity_matching_pipeline_gpu(
+def ditto_entity_matching_pipeline_gpu_fixed(
     # Hive connection parameters
     hive_host: str = "172.17.235.21",
     hive_port: int = 10000,
@@ -420,9 +419,7 @@ def ditto_entity_matching_pipeline_gpu(
     output_table: str = "ditto_matching_results"
 ):
     """
-    GPU-enabled Ditto matching pipeline that:
-    1. Extracts from Hive → processes with DITTO using GPU → returns results
-    2. Optionally saves results back to Hive
+    GPU-enabled Ditto matching pipeline with Kubeflow notebook-style GPU configuration
     """
     
     # Define environment variables for Hive connectivity
@@ -430,12 +427,7 @@ def ditto_entity_matching_pipeline_gpu(
         V1EnvVar(name='HIVE_HOST', value=hive_host),
         V1EnvVar(name='HIVE_PORT', value=str(hive_port)),
         V1EnvVar(name='HIVE_USER', value=hive_user),
-        V1EnvVar(name='HIVE_DATABASE', value=hive_database),
-        # GPU-specific environment variables
-        V1EnvVar(name='CUDA_VISIBLE_DEVICES', value='0'),
-        V1EnvVar(name='CUDA_DEVICE_ORDER', value='PCI_BUS_ID'),
-        V1EnvVar(name='NVIDIA_VISIBLE_DEVICES', value='all'),
-        V1EnvVar(name='NVIDIA_DRIVER_CAPABILITIES', value='compute,utility')
+        V1EnvVar(name='HIVE_DATABASE', value=hive_database)
     ]
     
     # Step 1: Extract from Hive and process with DITTO using GPU
@@ -456,34 +448,24 @@ def ditto_entity_matching_pipeline_gpu(
         summarize=summarize
     )
     
-    # Add environment variables and GPU resources
+    # Add environment variables
     for env_var in env_vars:
         process_results.add_env_variable(env_var)
     
     process_results.set_display_name('Extract from Hive and Run DITTO with GPU')
     
-    # Proper GPU resource configuration
+    # Simplified GPU configuration matching Kubeflow notebooks
     if use_gpu:
-        # Request GPU resources using the correct Kubernetes resource type
-        process_results.container.add_resource_request('nvidia.com/gpu', '1')
-        process_results.container.add_resource_limit('nvidia.com/gpu', '1')
+        # Simple GPU resource request - let Kubernetes handle the scheduling
+        process_results.set_gpu_limit(1)
         
-        # Add node selector to ensure GPU node
-        process_results.add_node_selector_constraint('accelerator', 'nvidia-tesla-k80')  # Adjust to your GPU type
-        
-        # Add tolerations for GPU nodes (if needed)
-        from kubernetes.client.models import V1Toleration
-        gpu_toleration = V1Toleration(
-            key="nvidia.com/gpu",
-            operator="Equal",
-            value="present",
-            effect="NoSchedule"
-        )
-        process_results.add_toleration(gpu_toleration)
-        
-        # High memory for GPU processing
+        # High memory for GPU processing  
         process_results.set_memory_limit('32Gi')
         process_results.set_memory_request('16Gi')
+        
+        # Remove problematic node selectors and tolerations
+        # Let Kubeflow handle GPU node selection automatically
+        
     else:
         # CPU-only resources
         process_results.set_memory_limit('16Gi')
@@ -505,7 +487,7 @@ def ditto_entity_matching_pipeline_gpu(
     ).after(process_results)
     
     # Add environment variables (CPU-only step)
-    for env_var in env_vars[:4]:  # Only Hive env vars, not GPU ones
+    for env_var in env_vars:
         save_results.add_env_variable(env_var)
     save_results.set_display_name('Save Results to Hive')
     save_results.set_caching_options(enable_caching=False)
@@ -513,25 +495,24 @@ def ditto_entity_matching_pipeline_gpu(
 def compile_pipeline(
     input_table: str = "model_reference",
     hive_host: str = "172.17.235.21",
-    pipeline_file: str = "ditto-pipeline-gpu.yaml"
+    pipeline_file: str = "ditto-pipeline-gpu-fixed.yaml"
 ):
     """Compile the GPU-enabled Ditto matching pipeline."""
     try:
         compiler.Compiler().compile(
-            pipeline_func=ditto_entity_matching_pipeline_gpu,
+            pipeline_func=ditto_entity_matching_pipeline_gpu_fixed,
             package_path=pipeline_file,
             type_check=True
         )
         
-        print(f"\nGPU-Enabled Pipeline compiled successfully!")
+        print(f"\nGPU-Fixed Pipeline compiled successfully!")
         print(f"Pipeline file: {os.path.abspath(pipeline_file)}")
         print(f"Input table: {input_table}")
         print(f"Hive Host: {hive_host}")
-        print("GPU Support: Properly configured with:")
-        print("   - NVIDIA GPU resource requests/limits")
-        print("   - GPU node selection")
-        print("   - CUDA environment variables")
-        print("   - GPU tolerations and constraints")
+        print("GPU Support: Uses Kubeflow notebook-style configuration:")
+        print("   - Simple set_gpu_limit(1) call")
+        print("   - No custom node selectors")
+        print("   - Let Kubeflow handle GPU scheduling automatically")
         
         return pipeline_file
         
@@ -540,13 +521,13 @@ def compile_pipeline(
         raise
 
 def main():
-    """Command line interface for GPU pipeline compilation."""
-    parser = argparse.ArgumentParser(description="Ditto Matching Kubeflow Pipeline (GPU-Enabled)")
+    """Command line interface for GPU-fixed pipeline compilation."""
+    parser = argparse.ArgumentParser(description="Ditto Matching Kubeflow Pipeline (GPU-Fixed)")
     
     parser.add_argument("--compile", action="store_true", help="Compile the pipeline")
     parser.add_argument("--input-table", default="model_reference", help="Input Hive table")
     parser.add_argument("--hive-host", default="172.17.235.21", help="Hive server host")
-    parser.add_argument("--output", default="ditto-pipeline-gpu.yaml", help="Output pipeline file")
+    parser.add_argument("--output", default="ditto-pipeline-gpu-fixed.yaml", help="Output pipeline file")
     parser.add_argument("--no-cache", action="store_true", help="Disable caching")
     
     args = parser.parse_args()
@@ -562,10 +543,10 @@ def main():
             pipeline_file=args.output
         )
         print(f"\nPipeline Steps:")
-        print("1. Extract from Hive + Run DITTO with GPU - All processing with GPU acceleration")
+        print("1. Extract from Hive + Run DITTO with GPU - Uses simple GPU configuration")
         print("2. Save Results to Hive - Store final results with GPU usage tracking")
         print(f"\nUsage: Upload {args.output} to your Kubeflow Pipelines UI")
-        print("Make sure your cluster has GPU nodes with NVIDIA drivers installed!")
+        print("This version uses the same GPU config as Kubeflow notebooks!")
         return pipeline_file
     else:
         print("Use --compile flag to compile the pipeline")
