@@ -252,7 +252,7 @@ def run_ditto_matching_func(
     
     # Build matcher command
     cmd = [
-        "python", "/app/ditto/matcher.py",
+        "python", "matcher.py",
         "--task", model_task,
         "--input_path", input_path,
         "--output_path", output_path,
@@ -441,22 +441,22 @@ def create_log_summary_func() -> str:
 # Create Kubeflow components
 extract_hive_data_op = create_component_from_func(
     func=extract_hive_data_func,
-    base_image='172.17.232.16:9001/ditto:1.0',
+    base_image='172.17.232.16:9001/ditto-notebook:2.0',
 )
 
 run_ditto_matching_op = create_component_from_func(
     func=run_ditto_matching_func,
-    base_image='172.17.232.16:9001/ditto:1.0',
+    base_image='172.17.232.16:9001/ditto-notebook:2.0',
 )
 
 save_results_to_hive_op = create_component_from_func(
     func=save_results_to_hive_func,
-    base_image='172.17.232.16:9001/ditto:1.0',
+    base_image='172.17.232.16:9001/ditto-notebook:2.0',
 )
 
 create_log_summary_op = create_component_from_func(
     func=create_log_summary_func,
-    base_image='172.17.232.16:9001/ditto:1.0',
+    base_image='172.17.232.16:9001/ditto-notebook:2.0',
 )
 
 def generate_pipeline_name(input_table: str) -> str:
