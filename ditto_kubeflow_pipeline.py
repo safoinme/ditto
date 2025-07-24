@@ -29,6 +29,27 @@ def extract_hive_data_func(
     import pandas as pd
     import json
     import os
+    from datetime import datetime
+    
+    # Setup logging to shared volume
+    log_dir = "/data/logs"
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = f"{log_dir}/extract_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    
+    def log_and_print(message):
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        log_msg = f"[{timestamp}] {message}"
+        print(log_msg)
+        with open(log_file, 'a') as f:
+            f.write(log_msg + '\n')
+    
+    log_and_print("=== EXTRACT DATA TASK STARTED ===")
+    log_and_print(f"Hive Host: {hive_host}:{hive_port}")
+    log_and_print(f"Database: {hive_database}")
+    log_and_print(f"Input Table: {input_table}")
+    log_and_print(f"Output Path: {output_path}")
+    log_and_print(f"Sample Limit: {sample_limit}")
+    log_and_print(f"Matching Mode: {matching_mode}")
     
     # Ensure output directory exists
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -174,13 +195,15 @@ def extract_hive_data_func(
                 matcher_record = [record['left'], record['right']]
                 f.write(json.dumps(matcher_record, ensure_ascii=True) + '\n')
         
-        print(f"Saved to: {output_path}")
+        log_and_print(f"Saved to: {output_path}")
         
         connection.close()
+        log_and_print("=== EXTRACT DATA TASK COMPLETED SUCCESSFULLY ===")
         return output_path
         
     except Exception as e:
-        print(f"Error in extract_hive_data_func: {str(e)}")
+        log_and_print(f"ERROR in extract_hive_data_func: {str(e)}")
+        log_and_print("=== EXTRACT DATA TASK FAILED ===")
         raise
 
 def run_ditto_matching_func(
@@ -200,6 +223,29 @@ def run_ditto_matching_func(
     import json
     import jsonlines
     from collections import namedtuple
+    from datetime import datetime
+    
+    # Setup logging to shared volume
+    log_dir = "/data/logs"
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = f"{log_dir}/matching_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    
+    def log_and_print(message):
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        log_msg = f"[{timestamp}] {message}"
+        print(log_msg)
+        with open(log_file, 'a') as f:
+            f.write(log_msg + '\n')
+    
+    log_and_print("=== DITTO MATCHING TASK STARTED ===")
+    log_and_print(f"Input Path: {input_path}")
+    log_and_print(f"Output Path: {output_path}")
+    log_and_print(f"Model Task: {model_task}")
+    log_and_print(f"Checkpoint Path: {checkpoint_path}")
+    log_and_print(f"Language Model: {lm}")
+    log_and_print(f"Max Length: {max_len}")
+    log_and_print(f"Use GPU: {use_gpu}")
+    log_and_print(f"FP16: {fp16}")
     
     # Ensure output directory exists
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -224,14 +270,17 @@ def run_ditto_matching_func(
     
     try:
         # Run matcher
-        print(f"Running command: {' '.join(cmd)}")
+        log_and_print(f"Running command: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        print(f"Matcher stdout: {result.stdout}")
+        log_and_print(f"Matcher stdout: {result.stdout}")
+        if result.stderr:
+            log_and_print(f"Matcher stderr: {result.stderr}")
         
         # Calculate metrics from output
         metrics = {"total_pairs": 0, "matches": 0, "non_matches": 0}
         
         if os.path.exists(output_path):
+            log_and_print(f"Reading results from {output_path}")
             with jsonlines.open(output_path) as reader:
                 for line in reader:
                     metrics["total_pairs"] += 1
@@ -239,18 +288,23 @@ def run_ditto_matching_func(
                         metrics["matches"] += 1
                     else:
                         metrics["non_matches"] += 1
+        else:
+            log_and_print(f"WARNING: Output file {output_path} does not exist")
         
-        print(f"Matching completed. Metrics: {metrics}")
+        log_and_print(f"Matching completed. Metrics: {metrics}")
+        log_and_print("=== DITTO MATCHING TASK COMPLETED SUCCESSFULLY ===")
         
         output = namedtuple('Outputs', ['output_path', 'metrics'])
         return output(output_path, metrics)
         
     except subprocess.CalledProcessError as e:
-        print(f"Matcher failed with error: {e}")
-        print(f"Stderr: {e.stderr}")
+        log_and_print(f"Matcher failed with error: {e}")
+        log_and_print(f"Stderr: {e.stderr}")
+        log_and_print("=== DITTO MATCHING TASK FAILED ===")
         raise
     except Exception as e:
-        print(f"Error in run_ditto_matching_func: {str(e)}")
+        log_and_print(f"ERROR in run_ditto_matching_func: {str(e)}")
+        log_and_print("=== DITTO MATCHING TASK FAILED ===")
         raise
 
 def save_results_to_hive_func(
@@ -344,6 +398,46 @@ def save_results_to_hive_func(
         print(f"Error saving to Hive: {str(e)}")
         return f"Error: {str(e)}"
 
+def create_log_summary_func() -> str:
+    """Create a summary of all logs from the pipeline run."""
+    import os
+    import glob
+    from datetime import datetime
+    
+    log_dir = "/data/logs"
+    summary_file = f"{log_dir}/pipeline_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    
+    try:
+        log_files = glob.glob(f"{log_dir}/*.log")
+        log_files.sort()
+        
+        with open(summary_file, 'w') as summary:
+            summary.write(f"=== PIPELINE EXECUTION SUMMARY ===\n")
+            summary.write(f"Generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            summary.write(f"Total log files: {len(log_files)}\n\n")
+            
+            for log_file in log_files:
+                if log_file != summary_file:
+                    summary.write(f"\n{'='*50}\n")
+                    summary.write(f"LOG FILE: {os.path.basename(log_file)}\n")
+                    summary.write(f"{'='*50}\n")
+                    
+                    try:
+                        with open(log_file, 'r') as f:
+                            summary.write(f.read())
+                    except Exception as e:
+                        summary.write(f"Error reading {log_file}: {str(e)}\n")
+            
+            summary.write(f"\n{'='*50}\n")
+            summary.write("=== END OF PIPELINE SUMMARY ===\n")
+        
+        print(f"Log summary created: {summary_file}")
+        return summary_file
+        
+    except Exception as e:
+        print(f"Error creating log summary: {str(e)}")
+        return f"Error: {str(e)}"
+
 # Create Kubeflow components
 extract_hive_data_op = create_component_from_func(
     func=extract_hive_data_func,
@@ -357,6 +451,11 @@ run_ditto_matching_op = create_component_from_func(
 
 save_results_to_hive_op = create_component_from_func(
     func=save_results_to_hive_func,
+    base_image='172.17.232.16:9001/ditto:1.0',
+)
+
+create_log_summary_op = create_component_from_func(
+    func=create_log_summary_func,
     base_image='172.17.232.16:9001/ditto:1.0',
 )
 
@@ -482,6 +581,12 @@ def ditto_entity_matching_pipeline(
         save_results.add_env_variable(env_var)
     save_results.set_display_name('Save Results to Hive')
     save_results.set_caching_options(enable_caching=False)
+    
+    # Step 4: Create log summary (always runs last)
+    log_summary = create_log_summary_op().after(save_results)
+    log_summary.add_pvolumes({'/data': vop})
+    log_summary.set_display_name('Create Log Summary')
+    log_summary.set_caching_options(enable_caching=False)
 
 def compile_pipeline(
     input_table: str = "model_reference",

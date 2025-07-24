@@ -376,12 +376,12 @@ def save_results_to_hive_func(
 # Create Kubeflow components
 extract_and_process_ditto_op = create_component_from_func(
     func=extract_and_process_ditto_func,
-    base_image='172.17.232.16:9001/ditto:1.0',  # Ensure this image has CUDA support
+    base_image='172.17.232.16:9001/ditto-notebook:1.5',  # Ensure this image has CUDA support
 )
 
 save_results_to_hive_op = create_component_from_func(
     func=save_results_to_hive_func,
-    base_image='172.17.232.16:9001/ditto:1.0',
+    base_image='172.17.232.16:9001/ditto-notebook:1.5',
 )
 
 @dsl.pipeline(
@@ -392,11 +392,11 @@ def ditto_entity_matching_pipeline_gpu_fixed(
     # Hive connection parameters
     hive_host: str = "172.17.235.21",
     hive_port: int = 10000,
-    hive_user: str = "hive",
-    hive_database: str = "default",
+    hive_user: str = "lhimer",
+    hive_database: str = "preprocessed_analytics",
     
     # Input table
-    input_table: str = "model_reference",
+    input_table: str = "preprocessed_analytics.model_reference",
     
     # Data limits (for testing)
     sample_limit: Optional[int] = None,
@@ -489,7 +489,7 @@ def ditto_entity_matching_pipeline_gpu_fixed(
     save_results.set_caching_options(enable_caching=False)
 
 def compile_pipeline(
-    input_table: str = "model_reference",
+    input_table: str = "preprocessed_analytics.model_reference",
     hive_host: str = "172.17.235.21",
     pipeline_file: str = "ditto-pipeline-gpu-fixed.yaml"
 ):
