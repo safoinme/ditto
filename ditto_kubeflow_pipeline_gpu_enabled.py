@@ -203,7 +203,7 @@ def extract_and_process_ditto_func(
         try:
             # Build matcher command with GPU support
             cmd = [
-                "python", "/app/ditto/matcher.py",
+                "python", "matcher.py",  # Since WORKDIR is /app/ditto
                 "--task", model_task,
                 "--input_path", input_path,
                 "--output_path", output_path,
@@ -232,10 +232,29 @@ def extract_and_process_ditto_func(
                 env['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
             
             print(f"Running DITTO command: {' '.join(cmd)}")
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
+            result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+            
+            if result.returncode != 0:
+                print(f"DITTO command failed with exit code {result.returncode}")
+                print(f"STDOUT: {result.stdout}")
+                print(f"STDERR: {result.stderr}")
+                
+                # Try without GPU as fallback
+                if use_gpu:
+                    print("Retrying without GPU...")
+                    cmd_cpu = [c for c in cmd if c not in ['--use_gpu', '--fp16']]
+                    result = subprocess.run(cmd_cpu, capture_output=True, text=True, env=env)
+                    if result.returncode != 0:
+                        raise subprocess.CalledProcessError(result.returncode, cmd_cpu, result.stdout, result.stderr)
+                    use_gpu = False
+                else:
+                    raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
+            
             print(f"DITTO completed successfully")
             if result.stdout:
                 print(f"DITTO Output: {result.stdout}")
+            if result.stderr:
+                print(f"DITTO Warnings: {result.stderr}")
             
             # Read and process results
             results = []
