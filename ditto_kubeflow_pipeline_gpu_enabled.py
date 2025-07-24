@@ -376,12 +376,12 @@ def save_results_to_hive_func(
 # Create Kubeflow components
 extract_and_process_ditto_op = create_component_from_func(
     func=extract_and_process_ditto_func,
-    base_image='172.17.232.16:9001/ditto-notebook:1.5',  # Ensure this image has CUDA support
+    base_image='172.17.232.16:9001/ditto-notebook:2.0',  # Ensure this image has CUDA support
 )
 
 save_results_to_hive_op = create_component_from_func(
     func=save_results_to_hive_func,
-    base_image='172.17.232.16:9001/ditto-notebook:1.5',
+    base_image='172.17.232.16:9001/ditto-notebook:2.0',
 )
 
 @dsl.pipeline(
@@ -453,6 +453,9 @@ def ditto_entity_matching_pipeline_gpu_fixed(
     
     process_results.set_display_name('Extract from Hive and Run DITTO with GPU')
     
+    # Force image pull
+    process_results.container.set_image_pull_policy('Always')
+    
     # Simplified GPU configuration matching Kubeflow notebooks
     if use_gpu:
         # Simple GPU resource request - let Kubernetes handle the scheduling
@@ -487,6 +490,9 @@ def ditto_entity_matching_pipeline_gpu_fixed(
         save_results.add_env_variable(env_var)
     save_results.set_display_name('Save Results to Hive')
     save_results.set_caching_options(enable_caching=False)
+    
+    # Force image pull for save step too
+    save_results.container.set_image_pull_policy('Always')
 
 def compile_pipeline(
     input_table: str = "preprocessed_analytics.model_reference",
