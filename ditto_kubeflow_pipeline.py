@@ -39,8 +39,7 @@ def extract_hive_data_func(
             host=hive_host,
             port=hive_port,
             username=hive_user,
-            database=hive_database,
-            auth='NOSASL'
+            database=hive_database
         )
         
         # Extract data
@@ -419,11 +418,12 @@ def ditto_entity_matching_pipeline(
     from kubernetes import client as k8s_client
     
     # Create a new PVC dynamically
-    vop = dsl.PipelineVolume(
-        name="ditto-shared-data",
+    vop = dsl.VolumeOp(
+        name="create-ditto-pvc",
+        resource_name="ditto-shared-data-pvc",
         size="10Gi",
-        access_modes=['ReadWriteMany']
-    )
+        modes=dsl.VOLUME_MODE_RWX
+    ).volume
     
     # Step 1: Extract data from Hive table and create pairs
     extract_data = extract_hive_data_op(

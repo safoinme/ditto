@@ -70,8 +70,7 @@ def extract_and_process_ditto_func(
             host=hive_host,
             port=hive_port,
             username=hive_user,
-            database=hive_database,
-            auth='NOSASL'
+            database=hive_database
         )
         
         # Extract data
