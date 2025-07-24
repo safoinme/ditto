@@ -1,0 +1,7 @@
+["COL name VAL John Smith COL age VAL 30 COL city VAL New York", "COL name VAL J. Smith COL age VAL 30 COL city VAL NYC"]
+["COL name VAL Alice Johnson COL age VAL 25 COL city VAL Boston", "COL name VAL Alice J. COL age VAL 25 COL city VAL Boston MA"]
+["COL name VAL Bob Wilson COL age VAL 35 COL city VAL Chicago", "COL name VAL Robert Wilson COL age VAL 35 COL city VAL Chicago IL"]
+["COL name VAL Mary Davis COL age VAL 28 COL city VAL Seattle", "COL name VAL M. Davis COL age VAL 28 COL city VAL Seattle WA"]
+["COL name VAL David Brown COL age VAL 42 COL city VAL Miami", "COL name VAL David Brown COL age VAL 42 COL city VAL Miami FL"]
+["COL name VAL John Smith COL age VAL 30 COL city VAL New York", "COL name VAL Alice Johnson COL age VAL 25 COL city VAL Boston"]
+["COL name VAL Bob Wilson COL age VAL 35 COL city VAL Chicago", "COL name VAL Mary Davis COL age VAL 28 COL city VAL Seattle"]

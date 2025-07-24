@@ -473,11 +473,11 @@ def ditto_entity_matching_pipeline(
     # Hive connection parameters
     hive_host: str = "172.17.235.21",
     hive_port: int = 10000,
-    hive_user: str = "hive",
-    hive_database: str = "default",
+    hive_user: str = "lhimer",
+    hive_database: str = "preprocessed_analytics",
     
     # Input table
-    input_table: str = "model_reference",
+    input_table: str = "preprocessed_analytics.model_reference",
     
     # Data limits (for testing)
     sample_limit: Optional[int] = None,
@@ -589,7 +589,7 @@ def ditto_entity_matching_pipeline(
     log_summary.set_caching_options(enable_caching=False)
 
 def compile_pipeline(
-    input_table: str = "model_reference",
+    input_table: str = "preprocessed_analytics.model_reference",
     hive_host: str = "172.17.235.21",
     pipeline_file: str = "ditto-pipeline.yaml"
 ):
@@ -621,7 +621,7 @@ def main():
     parser.add_argument("--compile", action="store_true", help="Compile the pipeline")
     
     # Pipeline parameters (optional with defaults)
-    parser.add_argument("--input-table", default="model_reference", 
+    parser.add_argument("--input-table", default="preprocessed_analytics.model_reference", 
                        help="Input Hive table")
     parser.add_argument("--hive-host", default="172.17.235.21", help="Hive server host")
     parser.add_argument("--output", default="ditto-pipeline.yaml", help="Output pipeline file")
