@@ -376,12 +376,12 @@ def save_results_to_hive_func(
 # Create Kubeflow components
 extract_and_process_ditto_op = create_component_from_func(
     func=extract_and_process_ditto_func,
-    base_image='172.17.232.16:9001/ditto:1.5',  # Ensure this image has CUDA support
+    base_image='172.17.232.16:9001/ditto:1.0',  # Ensure this image has CUDA support
 )
 
 save_results_to_hive_op = create_component_from_func(
     func=save_results_to_hive_func,
-    base_image='172.17.232.16:9001/ditto:1.5',
+    base_image='172.17.232.16:9001/ditto:1.0',
 )
 
 @dsl.pipeline(

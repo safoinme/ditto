@@ -360,17 +360,17 @@ def save_results_to_hive_func(
 # Create Kubeflow components
 extract_hive_data_op = create_component_from_func(
     func=extract_hive_data_func,
-    base_image='172.17.232.16:9001/ditto:1.5',
+    base_image='172.17.232.16:9001/ditto:1.0',
 )
 
 run_ditto_matching_op = create_component_from_func(
     func=run_ditto_matching_func,
-    base_image='172.17.232.16:9001/ditto:1.5',
+    base_image='172.17.232.16:9001/ditto:1.0',
 )
 
 save_results_to_hive_op = create_component_from_func(
     func=save_results_to_hive_func,
-    base_image='172.17.232.16:9001/ditto:1.5',
+    base_image='172.17.232.16:9001/ditto:1.0',
 )
 
 def generate_pipeline_name(input_table: str) -> str:
@@ -459,7 +459,7 @@ def ditto_entity_matching_pipeline_no_pvc(
     # Add GPU resources (no volume needed)
     matching_results.set_display_name('Run DITTO Matching')  
     matching_results.set_gpu_limit(1)
-    matching_results.set_memory_limit('8Gi')
+    matching_results.set_memory_limit('16Gi')
     matching_results.set_cpu_limit('4')
     matching_results.set_caching_options(enable_caching=False)  # Don't cache matching results
     
