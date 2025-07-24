@@ -210,11 +210,7 @@ def extract_and_process_ditto_func(
             
             # Check for matcher.py in different locations
             matcher_locations = [
-                "matcher.py", 
-                "/app/ditto/matcher.py", 
-                "/app/matcher.py",
                 "/home/jovyan/matcher.py",
-                "/home/jovyan/ditto/matcher.py"
             ]
             matcher_path = None
             for loc in matcher_locations:
