@@ -201,9 +201,40 @@ def extract_and_process_ditto_func(
             output_path = temp_output.name
         
         try:
+            # Debug: Check current directory and files
+            print(f"Current working directory: {os.getcwd()}")
+            print(f"Files in current directory: {os.listdir('.')}")
+            print(f"Checkpoint path exists: {os.path.exists(checkpoint_path)}")
+            if os.path.exists(checkpoint_path):
+                print(f"Files in checkpoint path: {os.listdir(checkpoint_path)}")
+            
+            # Check for matcher.py in different locations
+            matcher_locations = [
+                "matcher.py", 
+                "/app/ditto/matcher.py", 
+                "/app/matcher.py",
+                "/home/jovyan/matcher.py",
+                "/home/jovyan/ditto/matcher.py"
+            ]
+            matcher_path = None
+            for loc in matcher_locations:
+                if os.path.exists(loc):
+                    matcher_path = loc
+                    print(f"Found matcher.py at: {loc}")
+                    break
+            
+            if not matcher_path:
+                print("ERROR: matcher.py not found in any expected location")
+                return {
+                    "results": [],
+                    "metrics": {"total_pairs": 0, "matches": 0, "non_matches": 0},
+                    "gpu_used": False,
+                    "status": "error: matcher.py not found"
+                }
+            
             # Build matcher command with GPU support
             cmd = [
-                "python", "matcher.py",  # Since WORKDIR is /app/ditto
+                "python", matcher_path,
                 "--task", model_task,
                 "--input_path", input_path,
                 "--output_path", output_path,
