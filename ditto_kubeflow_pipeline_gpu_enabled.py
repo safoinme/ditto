@@ -460,19 +460,16 @@ def ditto_entity_matching_pipeline_gpu_fixed(
         process_results.set_gpu_limit(1)
         
         # High memory for GPU processing  
-        process_results.set_memory_limit('24Gi')
-        process_results.set_memory_request('16Gi')
+        process_results.set_memory_limit('16Gi')
         
         # Remove problematic node selectors and tolerations
         # Let Kubeflow handle GPU node selection automatically
         
     else:
         # CPU-only resources
-        process_results.set_memory_limit('24Gi')
-        process_results.set_memory_request('16Gi')
+        process_results.set_memory_limit('16Gi')
     
-    process_results.set_cpu_limit('6')
-    process_results.set_cpu_request('4')
+    process_results.set_cpu_limit('4')
     process_results.set_caching_options(enable_caching=False)  # Don't cache GPU jobs
     
     # Step 2: Save results to Hive

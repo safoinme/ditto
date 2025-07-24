@@ -415,14 +415,15 @@ def ditto_entity_matching_pipeline(
         V1EnvVar(name='HIVE_DATABASE', value=hive_database)
     ]
     
-    # Use existing shared PVC instead of creating new ones
+    # Create a new PVC for this pipeline run
     from kubernetes import client as k8s_client
     
-    # Define the shared PVC name
-    shared_pvc_name = "ditto-shared-data-pvc"
-    
-    # Create volume reference to existing PVC
-    vop = dsl.PipelineVolume(pvc=shared_pvc_name)
+    # Create a new PVC dynamically
+    vop = dsl.PipelineVolume(
+        name="ditto-shared-data",
+        size="10Gi",
+        access_modes=['ReadWriteMany']
+    )
     
     # Step 1: Extract data from Hive table and create pairs
     extract_data = extract_hive_data_op(
