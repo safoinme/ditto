@@ -210,7 +210,7 @@ def run_ditto_matching_func(
     input_path: str,
     output_path: str,
     model_task: str = "person_records",
-    checkpoint_path: str = "/checkpoints/",
+    checkpoint_path: str = "/home/jovyan/checkpoints/",
     lm: str = "bert",
     max_len: int = 64,
     use_gpu: bool = True,
@@ -487,7 +487,7 @@ def ditto_entity_matching_pipeline(
     
     # Ditto model parameters
     model_task: str = "person_records",
-    checkpoint_path: str = "/checkpoints",
+    checkpoint_path: str = "/home/jovyan/checkpoints",
     lm: str = "bert",
     max_len: int = 64,
     use_gpu: bool = True,
@@ -531,7 +531,7 @@ def ditto_entity_matching_pipeline(
         hive_user=hive_user,
         hive_database=hive_database,
         input_table=input_table,
-        output_path="/data/input/test_pairs.jsonl",
+        output_path="/data/input/pairs.jsonl",
         sample_limit=sample_limit,
         matching_mode=matching_mode
     )
@@ -545,7 +545,7 @@ def ditto_entity_matching_pipeline(
     
     # Step 2: Run ditto matching
     matching_results = run_ditto_matching_op(
-        input_path="/data/input/test_pairs.jsonl",
+        input_path="/data/input/pairs.jsonl",
         output_path="/data/output/matching_results.jsonl",
         model_task=model_task,
         checkpoint_path=checkpoint_path,
