@@ -118,6 +118,9 @@ RUN python -c "import torch; print(f'PyTorch version: {torch.__version__}'); pri
 # Copy the entire project
 COPY --chown=jovyan:users . .
 
+# Copy checkpoints into the image if they exist
+COPY --chown=jovyan:users checkpoints/ /checkpoints/ 2>/dev/null || echo "No checkpoints directory found"
+
 # Copy the Hive data extractor
 COPY --chown=jovyan:users hive_data_extractor.py .
 

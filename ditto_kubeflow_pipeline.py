@@ -557,7 +557,7 @@ def ditto_entity_matching_pipeline(
     ).after(extract_data)
     
     # Add volume and GPU resources
-    matching_results.add_pvolumes({'/data': vop, '/checkpoints': vop})
+    matching_results.add_pvolumes({'/data': vop})
     matching_results.set_display_name('Run DITTO Matching')  
     matching_results.set_gpu_limit(1)
     matching_results.set_memory_limit('16Gi')
