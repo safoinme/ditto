@@ -17,7 +17,8 @@ RUN apt-get update && apt-get install -y \
     git \
     vim \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s /usr/bin/python3 /usr/bin/python
 
 # Install Jupyter and create jovyan user
 RUN pip3 install --no-cache-dir jupyter jupyterlab \

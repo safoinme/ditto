@@ -521,7 +521,7 @@ def ditto_entity_matching_pipeline(
         name="create-ditto-pvc",
         resource_name="ditto-shared-data-pvc",
         size="10Gi",
-        modes=["ReadWriteMany"]
+        modes=["ReadWriteOnce"]
     ).volume
     
     # Step 1: Extract data from Hive table and create pairs
