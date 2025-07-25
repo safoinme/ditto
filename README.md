@@ -90,10 +90,10 @@ When the ``--summarize`` flag is set, the input sequence will be summarized by r
 Use the command:
 ```
 CUDA_VISIBLE_DEVICES=0 python matcher.py \
-  --task wdc_all_small \
+  --task person_records \
   --input_path input/input_small.jsonl \
   --output_path output/output_small.jsonl \
-  --lm distilbert \
+  --lm bert \
   --max_len 64 \
   --use_gpu \
   --fp16 \
